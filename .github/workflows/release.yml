@@ -1,0 +1,36 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Tag matches Cargo.toml
+        shell: bash
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          [ "v$version" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} does not match Cargo.toml version $version"; exit 1; }
+      - run: cargo test --locked
+      - run: cargo build --release --locked
+        env:
+          RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=.
+      - name: Checksum
+        shell: pwsh
+        run: |
+          Copy-Item target/release/camel.exe camel.exe
+          $hash = (Get-FileHash camel.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  camel.exe" | Out-File -Encoding ascii camel.exe.sha256
+      - name: Publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" camel.exe camel.exe.sha256 --title "Camel ${GITHUB_REF_NAME#v}" --generate-notes
