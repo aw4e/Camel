@@ -23,15 +23,17 @@ pub struct Monitor {
     sys: System,
     pub stats: Stats,
     at: Instant,
+    ticks: u32,
 }
 
 impl Monitor {
     pub fn new() -> Self {
-        Self { sys: System::new(), stats: Stats::default(), at: Instant::now() - Duration::from_secs(10) }
+        Self { sys: System::new(), stats: Stats::default(), at: Instant::now() - Duration::from_secs(10), ticks: 0 }
     }
 
-    /// Returns true when the 1 Hz refresh actually ran.
-    pub fn refresh(&mut self) -> bool {
+    /// Returns true when the 1 Hz refresh actually ran. The registry walk behind the mic/camera dots is
+    /// the priciest part, so it runs every 2 s and only while `privacy` is on.
+    pub fn refresh(&mut self, privacy: bool) -> bool {
         if self.at.elapsed() < Duration::from_secs(1) {
             return false;
         }
@@ -50,8 +52,13 @@ impl Monitor {
         } else {
             s.battery = None;
         }
-        s.mic = capability_in_use("microphone");
-        s.cam = capability_in_use("webcam");
+        self.ticks = self.ticks.wrapping_add(1);
+        if !privacy {
+            (s.mic, s.cam) = (false, false);
+        } else if self.ticks % 2 == 1 {
+            s.mic = capability_in_use("microphone");
+            s.cam = capability_in_use("webcam");
+        }
         true
     }
 }
@@ -74,6 +81,12 @@ fn capability_in_use(kind: &str) -> bool {
             busy(&k)
         }
     })
+}
+
+/// Drops cold pages (GPU driver, startup allocations) from the working set. They fault back in on use.
+pub fn trim_memory() {
+    use windows::Win32::System::{ProcessStatus::EmptyWorkingSet, Threading::GetCurrentProcess};
+    let _ = unsafe { EmptyWorkingSet(GetCurrentProcess()) };
 }
 
 pub fn clipboard_seq() -> u32 {

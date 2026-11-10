@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 arboard = "3.7.0"
 chrono = "0.4.45"
-eframe = "0.37.0"
+eframe = { version = "0.37.0", default-features = false, features = ["default_fonts", "glow"] }
 global-hotkey = "0.9.0"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
 serde = { version = "1.0.229", features = ["derive"] }
@@ -14,5 +14,11 @@ serde_json = "1.0.154"
 sysinfo = "0.39.6"
 tray-icon = "0.26.1"
 ureq = { version = "3.5.0", features = ["json"] }
-windows = { version = "0.62.2", features = ["Media_Control", "Storage_Streams", "Foundation", "Win32_System_Power", "Win32_System_WinRT", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_System_DataExchange", "Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Foundation", "Win32_System_Variant"] }
+windows = { version = "0.62.2", features = ["Media_Control", "Storage_Streams", "Foundation", "Win32_System_Power", "Win32_System_WinRT", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_System_DataExchange", "Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Foundation", "Win32_System_Variant", "Win32_Graphics_Dwm", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
 winreg = "0.56.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

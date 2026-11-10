@@ -72,23 +72,38 @@ pub fn spawn(lyrics_enabled: bool) -> Handle {
     let worker_lyr = lyr.clone();
     std::thread::spawn(move || {
         unsafe { RoInitialize(RO_INIT_MULTITHREADED).ok() };
+        let mut mgr = None;
         loop {
-            // errors (no session, manager gone) just mean "nothing playing"
-            let _ = tick(&shared, &rx, &worker_lyr);
-            std::thread::sleep(Duration::from_millis(250));
+            // A command wakes the worker at once; otherwise poll twice a second.
+            let mut cmds = Vec::new();
+            match rx.recv_timeout(Duration::from_millis(500)) {
+                Ok(c) => {
+                    cmds.push(c);
+                    cmds.extend(rx.try_iter());
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+            // errors (no session, manager gone) just mean "nothing playing"; drop the manager and retry
+            if tick(&mut mgr, &shared, cmds, &worker_lyr).is_err() {
+                mgr = None;
+            }
         }
     });
     Handle { state, tx, lyrics: lyr }
 }
 
-fn tick(shared: &Mutex<State>, rx: &mpsc::Receiver<Cmd>, lyr: &Arc<LyricsCtx>) -> windows::core::Result<()> {
-    let mgr = Manager::RequestAsync()?.join()?;
+fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &Arc<LyricsCtx>) -> windows::core::Result<()> {
+    let mgr = match mgr {
+        Some(m) => m,
+        None => mgr.insert(Manager::RequestAsync()?.join()?),
+    };
     let Ok(session) = mgr.GetCurrentSession() else {
         *shared.lock().unwrap() = State::default();
         return Ok(());
     };
 
-    while let Ok(c) = rx.try_recv() {
+    for c in cmds {
         match c {
             Cmd::Prev => session.TrySkipPreviousAsync()?.join()?,
             Cmd::Toggle => session.TryTogglePlayPauseAsync()?.join()?,

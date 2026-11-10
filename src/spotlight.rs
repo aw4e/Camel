@@ -66,7 +66,8 @@ fn walk(dir: &Path, depth: u32, apps: bool, out: &mut Vec<Entry>) {
         if fname.starts_with('.') || fname == "node_modules" || fname == "target" {
             continue;
         }
-        if path.is_dir() {
+        // file_type() comes free with the directory listing; is_dir() on the path costs a stat per entry
+        if e.file_type().is_ok_and(|t| t.is_dir()) {
             if depth > 0 {
                 walk(&path, depth - 1, apps, out);
             }
