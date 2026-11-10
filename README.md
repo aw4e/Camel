@@ -18,23 +18,49 @@ Written in Rust with [egui](https://github.com/emilk/egui) (glow backend). About
 
 | | |
 |---|---|
-| **Now playing** | Title, artist, album art, seek bar and transport controls for any app that talks to Windows media controls (Spotify, browsers, players). Synced lyrics from [lrclib.net](https://lrclib.net): messy names from YouTube (`Artist - Song (Official Video)`, `Artist - Topic`, `ArtistVEVO`) are cleaned and searched several ways, and a result is only used when its title and length match. Players that report no timeline (some browser tabs) show no lyrics, because there is no position to follow. |
+| **Now playing** | Title, artist, album art, seek bar and transport controls for any app that uses Windows media controls (Spotify, browsers, players), with synced lyrics from [lrclib.net](https://lrclib.net). |
 | **Shelf** | Drag files onto the notch to park them, click to open, right-click to remove. |
-| **Clipboard history** | The last eight things you copied, text and pictures. Click one to copy it again, right-click to remove it, or clear them all. Hover a row to pin it (up to four): a pinned item stays on top, survives new copies and Clear. A picture shows a thumbnail, its size and how much memory it takes. Pictures are kept as compressed PNG, 24 MB at most in total, and the oldest go first. Kept in memory only, never saved to disk, and anything a password manager marks as sensitive is skipped. |
+| **Clipboard history** | The last eight things you copied, text and pictures. Click to copy again, right-click to remove, hover to pin. Kept in memory only. |
 | **Clock** | Time, date and the whole month, with today marked. The notch grows by 14 px in months that need six rows. |
-| **Focus timer** | A countdown with a progress ring and a length you set yourself: click the time and type `30` or `25:30`, use the − and + buttons (5 minutes, or 1 with Shift), scroll over the timer (1 minute per notch), or pick 15, 25 or 45. Anything from 1 second to 3 hours, locked while it runs. The time left shows in the closed pill, and you get a beep and a notice when the session ends. |
+| **Focus timer** | A countdown with a progress ring and a length you set yourself, from 1 second to 3 hours. The time left shows in the closed pill. |
 | **Mixer** | Master volume plus a slider for each app that is playing audio. |
 | **Spotlight** | `Alt+Space` opens a launcher: calculator, unit conversion (`5 km in miles`, `100 f to c`), Start Menu apps, files from Desktop, Documents and Downloads, system actions and a last row that opens a link or searches the web (DuckDuckGo). See below. |
 | **Volume HUD** | When the master volume or mute changes (volume keys, another app), a bar with the level shows in the notch for a moment. It stays quiet while the Mixer page is open. |
 | **Keep awake** | Stops the screen and sleep from turning off. Switch it on from the tray menu or by typing `awake` in Spotlight. A small sun shows in the closed pill while it is on. Off again every time Camel starts. |
 | **Toasts** | A short notice when you copy something, plug in or unplug the charger, or the battery is low. |
 | **Privacy dots** | Green and orange dots while a microphone or camera is in use. |
-| **Apps** | Installed programs read from the registry, with a search box. Hover a row to uninstall it (its own uninstaller runs, with the usual admin prompt) or open its install folder. When the uninstaller finishes, Camel looks for leftover folders and offers to move them to the Recycle Bin. A **Startup** view lists what Task Manager lists (Run keys, 32-bit Run keys and both Startup folders) and lets you switch each
-item off and on. Machine-wide items need Camel to run as administrator and show "Admin" instead of a switch when it does not. |
-| **Updates** | Camel checks GitHub for a newer release shortly after it starts and then once a day, and tells you when one exists. It never installs on its own: press **Update** in Settings (next to Quit) or type `update` in Spotlight. The download must match the SHA-256 published with the release, the old copy is kept aside until the new one has started, and Camel restarts into it. The version number sits next to Quit; click it to check now. Turn **Check for updates** off in Settings and Camel makes no update request unless you ask. |
+| **Apps** | Installed programs with a search box: uninstall them, clean up leftovers, and switch startup items on or off. |
+| **Updates** | Checks GitHub for a newer release and installs it when you ask. |
 | **Tray icon** | Keep awake, Settings and Quit. |
 
 Camel hides itself while a fullscreen game or presentation is running.
+
+### Details
+
+**Lyrics.** Names that YouTube reports (`Artist - Song (Official Video)`, `Artist - Topic`, `ArtistVEVO`) are cleaned and
+searched several ways, and a result is only used when its title and length match. Players that report no timeline (some
+browser tabs) show no lyrics, because there is no position to follow.
+
+**Clipboard history.** Hover a row to pin it (up to four): a pinned item stays on top and survives new copies and Clear.
+A picture shows a thumbnail, its size and how much memory it takes. Pictures are kept as compressed PNG, 24 MB at most in
+total, and the oldest go first. Nothing is saved to disk, and anything a password manager marks as sensitive is skipped.
+
+**Focus timer.** Click the time and type `30` or `25:30`, use the − and + buttons (5 minutes, or 1 with Shift), scroll over
+the timer (1 minute per notch), or pick 15, 25 or 45. It is locked while it runs, and you get a beep and a notice when the
+session ends.
+
+**Apps.** Programs are read from the registry. Hover a row to uninstall it (its own uninstaller runs, with the usual admin
+prompt) or open its install folder. When the uninstaller finishes, Camel looks for leftover folders and offers to move them
+to the Recycle Bin. The **Startup** view lists what Task Manager lists (Run keys, 32-bit Run keys and both Startup folders)
+and lets you switch each item off and on. Machine-wide items need Camel to run as administrator and show "Admin" instead of
+a switch when it does not.
+
+**Updates.** Camel checks GitHub shortly after it starts and then once a day, and tells you when a newer release exists. It
+never installs on its own: press **Update** in Settings (next to Quit) or type `update` in Spotlight. The download must match
+the SHA-256 published with the release, the old copy is kept aside until the new one has started, and Camel restarts into
+it. The version number sits next to Quit; click it to check now. Turn **Check for updates** off in Settings and Camel makes
+no update request unless you ask.
+
 
 ## Spotlight commands
 
