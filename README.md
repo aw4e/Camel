@@ -175,9 +175,16 @@ loaded, for example) are queued for deletion at the next restart.
 Clipboard history lives in memory and disappears when Camel quits. Turn **Clipboard history** off in settings and
 Camel stops reading the clipboard altogether.
 
+## License
+
+Camel is released under the [MIT License](LICENSE): use it, change it, share it, even sell it, as long as the
+copyright notice stays. Contributions are welcome through issues and pull requests, and they are accepted under the
+same license.
+
 ## Credits
 
-- Font: Open Sans (SIL Open Font License).
+- Font: Open Sans, embedded in the exe, under the SIL Open Font License ([assets/OFL.txt](assets/OFL.txt)).
+- The Rust crates Camel is built from keep their own licenses (MIT, Apache-2.0 and similar).
 
 ## Notes
 
