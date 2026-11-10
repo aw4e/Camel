@@ -68,18 +68,35 @@ pub(crate) fn setup_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-/// Windows 11 draws a 1px border and rounded corners around every top-level window, which outlines the
-/// transparent margins. Ask DWM for neither.
+/// Removes everything Windows draws around the window itself: the 1px non-client edge at the top that shows when the
+/// window floats away from the screen edge (Spotlight), the Windows 11 border and the rounded corners. They would
+/// outline the transparent margins. Must run on the window's own thread.
 pub(crate) fn strip_window_frame() {
+    use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
     use windows::Win32::Graphics::Dwm::{DWMWA_BORDER_COLOR, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND, DwmSetWindowAttribute};
-    use windows::Win32::UI::WindowsAndMessaging::FindWindowW;
+    use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        FindWindowW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, WM_NCCALCSIZE,
+    };
     use windows::core::w;
+
+    // No non-client area at all: the client area is the whole window.
+    unsafe extern "system" fn no_frame(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM, _id: usize, _data: usize) -> LRESULT {
+        if msg == WM_NCCALCSIZE && wparam.0 != 0 {
+            return LRESULT(0);
+        }
+        unsafe { DefSubclassProc(hwnd, msg, wparam, lparam) }
+    }
+
     let Ok(hwnd) = (unsafe { FindWindowW(None, w!("Camel")) }) else { return };
     let corners = DWMWCP_DONOTROUND;
     let no_border = 0xFFFF_FFFEu32; // DWMWA_COLOR_NONE
     unsafe {
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &raw const corners as *const _, 4);
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &raw const no_border as *const _, 4);
+        if SetWindowSubclass(hwnd, Some(no_frame), 1, 0).as_bool() {
+            let _ = SetWindowPos(hwnd, None, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
     }
 }
 
