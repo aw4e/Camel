@@ -7,12 +7,71 @@
 
 <p align="center"><b>A Mac-style notch bar for Windows.</b></p>
 
-A notch bar for Windows, in the style of the MacBook notch and Dynamic Island. Camel sits at the top center of your
-screen as a small black pill, hugging the screen edge with the flared corners of a real notch. Hover it and it
-springs open into a compact control center: now playing, a file shelf, clock, per-app volume and a
+<p align="center">
+  <a href="https://github.com/aw4e/Camel/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/aw4e/Camel?color=0a84ff"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/aw4e/Camel?color=30d158"></a>
+  <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-555">
+  <img alt="Rust, edition 2024" src="https://img.shields.io/badge/Rust-2024-ff9f0a">
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#spotlight-commands">Spotlight</a> ·
+  <a href="#privacy-and-security">Privacy</a> ·
+  <a href="#build-from-source">Build</a> ·
+  <a href="#contributing">Contributing</a>
+</p>
+
+Camel sits at the top center of your screen as a small black pill, hugging the edge with the flared corners of a real
+notch, like the MacBook notch and Dynamic Island. Hover it and it springs open into a compact control center: now playing
+with synced lyrics, per-app volume, clock, focus timer, file shelf, clipboard history, an app manager and a
 Spotlight-style launcher.
 
-Written in Rust with [egui](https://github.com/emilk/egui) (glow backend). About 7 MB, roughly 20 MB of RAM when idle.
+- **Small and quiet.** One executable of about 7 MB, written in Rust with [egui](https://github.com/emilk/egui) (glow
+  backend). It trims its own memory when idle and hides while a fullscreen game or presentation is running.
+- **Private by default.** Clipboard history stays in memory. The only network requests are lyrics and update checks, and
+  both can be switched off. See [Privacy and security](#privacy-and-security).
+- **Open source.** MIT licensed, with tests for the logic and for the layout rules.
+
+## Install
+
+1. Download `camel.exe` from the [latest release](https://github.com/aw4e/Camel/releases/latest) and put it anywhere.
+2. Run it. Windows asks for administrator rights once (see [Administrator rights](#administrator-rights)).
+
+Windows 10 or 11 is required. The executable is not code-signed, so SmartScreen may warn on the first run. To check that
+the file is the one that was released, compare its hash with the `camel.exe.sha256` file from the same release:
+
+```powershell
+(Get-FileHash .\camel.exe -Algorithm SHA256).Hash.ToLower()
+```
+
+Camel updates itself when you ask it to (see [Updates](#details)). To uninstall, quit Camel from the tray menu and delete
+`camel.exe` and the `%APPDATA%\Camel` folder. If you turned on **Start with Windows**, switch it off first, or remove the
+task with `schtasks /Delete /TN Camel /F`.
+
+## Using Camel
+
+- **Hover** the pill to open it. Move away to close it. With **Hover to expand** off, click it instead.
+- **Click** the tab icons, or **scroll** over the tab row, to switch pages.
+- **Scroll sideways** on the media page to skip tracks. **Middle-click** toggles play and pause.
+- **Alt+Space** opens Spotlight.
+- **Gear icon** opens settings. Quit lives there and in the tray menu.
+
+Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by default except **Start with Windows**:
+
+| Setting | Effect |
+|---|---|
+| Start with Windows | Starts Camel when you sign in. |
+| Hover to expand | Opens the notch on hover instead of on click. |
+| Always on top | Keeps the notch above other windows. |
+| Hide on fullscreen | Hides the notch while a fullscreen app is running. |
+| Check for updates | Looks for a newer release shortly after start and then daily. |
+| Synced lyrics | Fetches lyrics for the current track. |
+| Clipboard history | Records what you copy. Off means Camel never reads the clipboard. |
+| Privacy indicators | Shows dots while a microphone or camera is in use. |
+| Volume HUD | Shows a bar when the master volume or mute changes. |
+| Spotlight (Alt+Space) | Enables the launcher and its hotkey. |
 
 ## Features
 
@@ -24,16 +83,14 @@ Written in Rust with [egui](https://github.com/emilk/egui) (glow backend). About
 | **Clock** | Time, date and the whole month, with today marked. The notch grows by 14 px in months that need six rows. |
 | **Focus timer** | A countdown with a progress ring and a length you set yourself, from 1 second to 3 hours. The time left shows in the closed pill. |
 | **Mixer** | Master volume plus a slider for each app that is playing audio. |
-| **Spotlight** | `Alt+Space` opens a launcher: calculator, unit conversion (`5 km in miles`, `100 f to c`), Start Menu apps, files from Desktop, Documents and Downloads, system actions and a last row that opens a link or searches the web (DuckDuckGo). See below. |
-| **Volume HUD** | When the master volume or mute changes (volume keys, another app), a bar with the level shows in the notch for a moment. It stays quiet while the Mixer page is open. |
+| **Spotlight** | A launcher for apps, files, a calculator, unit conversion, system actions and the web. See [Spotlight commands](#spotlight-commands). |
+| **Volume HUD** | A bar with the level shows in the notch when the master volume or mute changes. It stays quiet while the Mixer page is open. |
 | **Keep awake** | Stops the screen and sleep from turning off. Switch it on from the tray menu or by typing `awake` in Spotlight. A small sun shows in the closed pill while it is on. Off again every time Camel starts. |
 | **Toasts** | A short notice when you copy something, plug in or unplug the charger, or the battery is low. |
 | **Privacy dots** | Green and orange dots while a microphone or camera is in use. |
 | **Apps** | Installed programs with a search box: uninstall them, clean up leftovers, and switch startup items on or off. |
 | **Updates** | Checks GitHub for a newer release and installs it when you ask. |
 | **Tray icon** | Keep awake, Settings and Quit. |
-
-Camel hides itself while a fullscreen game or presentation is running.
 
 ### Details
 
@@ -61,10 +118,11 @@ the SHA-256 published with the release, the old copy is kept aside until the new
 it. The version number sits next to Quit; click it to check now. Turn **Check for updates** off in Settings and Camel makes
 no update request unless you ask.
 
-
 ## Spotlight commands
 
-Type a few letters and press Enter. Actions that can lose work show a red row and need a second Enter.
+Type a few letters and press Enter. Actions that can lose work show a red row and need a second Enter. Anything else you
+type searches Start Menu apps and files in Desktop, Documents and Downloads, and the last row opens a link or searches the
+web with DuckDuckGo.
 
 | Type | Does |
 |---|---|
@@ -77,61 +135,114 @@ Type a few letters and press Enter. Actions that can lose work show a red row an
 | `note buy milk` | Saves a dated line to `%APPDATA%\Camel\notes.txt`. `notes` opens that file. |
 | `kill chrome` | Ends every running program whose name starts with it, after a second Enter. System programs (Explorer, `svchost`, …) and Camel itself are never offered. |
 | `5 km in miles`, `100 f to c`, `2 kg to lb` | Converts length, weight, volume, time, speed and temperature. Enter copies the result. |
+| `2*(3+4)` | Calculates. Enter copies the result. |
 
-## Controls
+## Privacy and security
 
-- **Hover** the pill to open it. Move away to close it.
-- **Click** the tab icons, or **scroll** over the tab row, to switch pages.
-- **Scroll sideways** on the media page to skip tracks. **Middle-click** toggles play and pause.
-- **Gear icon** opens settings. Quit lives there and in the tray menu.
+**Network.** Camel makes two kinds of request, and both can be turned off:
 
-Settings (all on by default except autostart): hover to expand, always on top, hide on fullscreen, check for updates,
-synced lyrics, clipboard history, privacy indicators, volume HUD, Spotlight, start with Windows. They are saved to
-`%APPDATA%\Camel\settings.json`.
+| Request | When | What it sends |
+|---|---|---|
+| lrclib.net | **Synced lyrics** is on and a track plays | The artist, track title and duration. |
+| api.github.com and github.com | **Check for updates** is on, or you ask for an update | A request for the latest release of this repository, which reveals your IP address and nothing else of yours. |
 
-## Install
+With both off, Camel makes no network requests. The web row in Spotlight only opens your browser when you pick it.
 
-Download `camel.exe` from the [latest release](https://github.com/aw4e/Camel/releases/latest), put it anywhere and run
-it. The file is not code-signed, so Windows SmartScreen may warn on the first run; check the SHA-256 in
-`camel.exe.sha256` against the file if you want to be sure it is the one that was released.
+**Local data.** Clipboard history lives in memory and disappears when Camel quits. Turn **Clipboard history** off and
+Camel stops reading the clipboard altogether. Settings, notes and the uninstall record live in `%APPDATA%\Camel`.
 
-## Build
+**Apps.** The Apps tab reads the registry and the file system on your machine and sends nothing anywhere. Leftover cleanup
+only offers folders named exactly like the program (or its install folder) under the usual data locations, never registry
+keys, and only moves them to the Recycle Bin when you click **Clean up**. Camel remembers a finished uninstall in
+`%APPDATA%\Camel\uninstall.json` until you clean up or dismiss it, so closing Camel does not lose the list and a failed
+clean up can be retried. Files that Windows will not release are queued for deletion at the next restart.
 
-Requires Windows 10 or 11 and a recent Rust toolchain (edition 2024).
-
-```powershell
-cargo run --release
-```
-
-The release build is `target\release\camel.exe`. It is a single file; copy it anywhere and run it.
+**Updates.** A download is accepted only from this repository's release downloads and only when its SHA-256 matches the
+one published with the release. The executable is not code-signed, so trust rests on the GitHub account that publishes the
+releases.
 
 ### Administrator rights
 
 The release build asks for administrator rights when it starts: it reopens itself through the UAC prompt and the
 unelevated copy exits. That is what lets the Apps tab move leftover folders out of `Program Files` and switch off
-machine-wide startup entries. `cargo run --release` works the same way. If you decline the prompt, Camel keeps running
-without admin rights, and the actions that need them say so. Start it with `--no-elevate` to skip the prompt.
-Debug builds (`cargo run`) never ask.
+machine-wide startup entries. If you decline the prompt, Camel keeps running without admin rights, and the actions that
+need them say so. Start it with `--no-elevate` to skip the prompt. Debug builds (`cargo run`) never ask.
 
 Running elevated has side effects:
 
 - **Start with Windows** registers a scheduled task with the highest run level instead of a `Run` entry, because Windows
-  silently skips elevated programs listed under `Run`. Switch the setting off and on once after updating, so the task is created.
+  silently skips elevated programs listed under `Run`.
 - Windows blocks drag and drop from a normal Explorer window into an elevated window, so dragging files onto the shelf
   does not work in the release build.
 - Programs and files you open from Spotlight, the shelf or the Apps tab start with administrator rights too.
 
+## Build from source
+
+Requires Windows 10 or 11 and a recent Rust toolchain (edition 2024).
+
+```powershell
+git clone https://github.com/aw4e/Camel.git
+cd Camel
+cargo run --release
+```
+
+The release build is `target\release\camel.exe`, a single file you can copy anywhere.
+
+Before sending a change, run:
+
+```powershell
+cargo fmt --check
+cargo clippy --all-targets
+cargo test
+```
+
+`rustfmt.toml` sets the line width to 160. A few tests talk to the real system and are skipped by default: run
+`cargo test --bin camel clipboard_round_trip -- --ignored` (writes to the clipboard) or `finds_lyrics_online` (needs the
+network) by hand.
+
+### Releases
+
+The version lives in `Cargo.toml`. Pushing a tag that matches it (`v0.2.2` for `version = "0.2.2"`) starts the
+[release workflow](.github/workflows/release.yml), which tests, builds on Windows and publishes `camel.exe` together with
+`camel.exe.sha256`. Camel's updater reads that release.
+
 ### Fonts
 
-Camel uses the embedded Open Sans (OFL) by default. If a `fonts` folder with `SF-Pro-Display-Regular.otf` and
-`SF-Pro-Display-Semibold.otf` sits next to the exe (or in the project root while developing), it uses those
-instead. SF Pro is Apple's font and is not included in this repository, so `fonts/` is git-ignored. Obtain it from
-Apple under its license if you want that look.
+Camel uses the embedded Open Sans by default. If a `fonts` folder with `SF-Pro-Display-Regular.otf` and
+`SF-Pro-Display-Semibold.otf` sits next to the exe (or in the project root while developing), it uses those instead. SF Pro
+is Apple's font and is not included in this repository, so `fonts/` is git-ignored. Obtain it from Apple under its license
+if you want that look.
+
+### Project layout
+
+```
+src/main.rs                  entry point
+src/notch.rs                 app state, input, animation, window sizing
+src/notch/draw.rs            closed pill, toast and the tab bar
+src/notch/tabs/              one file per page: media, mixer, clock, timer, shelf, clipboard, apps, settings
+src/notch/spotlight_view.rs  Spotlight panel
+src/layout.rs                golden-ratio and Fibonacci layout tokens, with tests
+src/platform.rs              tray, hotkey, fonts, window frame, elevation
+src/widgets.rs               small drawing and input helpers
+src/ui.rs                    icons, sliders, switches, notch shape
+src/media.rs                 Windows media session worker
+src/lyrics.rs                lrclib lookup, name cleaning, LRC parsing
+src/mixer.rs                 WASAPI master and per-app volume, mute
+src/monitor.rs               battery, CPU/RAM, mic/camera, clipboard, memory trim
+src/spotlight.rs             launcher index, search and calculator
+src/settings.rs              settings file and autostart
+src/apps.rs                  installed programs, uninstall, leftovers, startup entries
+src/actions.rs               Spotlight actions: power, timers, quitting programs, unit conversion
+src/clipboard.rs             clipboard history and pins
+src/notes.rs                 quick notes
+src/update.rs                release check, verified download, in-place swap
+src/focus.rs                 focus timer
+```
 
 ## Design rules
 
-Layout numbers are not picked by eye. They are named constants at the top of `src/layout.rs`, and its
-tests fail if a screen drifts from them:
+Layout numbers are not picked by eye. They are named constants in `src/layout.rs`, and its tests fail if a screen drifts
+from them:
 
 - **Margins:** every screen has a 16 px left and right margin, on a 4 px grid. List rows start at the margin and inset
   their text by 8.
@@ -153,69 +264,36 @@ tests fail if a screen drifts from them:
 
 The Settings screen is the densest, so its two groups are the one place where rows are tighter (21 px).
 
-## Brand
+## Known limitations
 
-Logo, app icon and favicon live in `assets/brand/`. See [assets/brand/BRAND.md](assets/brand/BRAND.md) for colors, sizes and usage.
+- Windows only. Camel relies on Windows media controls, WASAPI, the registry and DWM.
+- The Apps tab covers classic desktop programs. Microsoft Store apps, Windows updates and hidden system components are not
+  listed.
+- Spotlight indexes up to 60,000 files, and the index lives in memory only.
+- Mic and camera dots read the Windows privacy consent store, so they follow what Windows itself reports.
+- Lyrics can be out of sync for some players, and some browser tabs report no timeline at all. See the open
+  [issues](https://github.com/aw4e/Camel/issues).
 
-## Project layout
+## Contributing
 
-```
-src/main.rs         entry point
-src/notch.rs        app state, input, animation, window sizing
-src/notch/draw.rs   closed pill, toast and the tab bar
-src/notch/tabs/     one file per page: media, mixer, clock, timer, shelf, clipboard, apps, settings
-src/notch/spotlight_view.rs  Spotlight panel
-src/layout.rs       golden-ratio and Fibonacci layout tokens, with tests
-src/platform.rs     tray, hotkey, fonts, window frame, elevation
-src/widgets.rs      small drawing and input helpers
-src/ui.rs           icons, sliders, switches, notch shape
-src/media.rs        Windows media session worker
-src/lyrics.rs       lrclib lookup, name cleaning, LRC parsing
-src/mixer.rs        WASAPI master and per-app volume, mute
-src/monitor.rs      battery, CPU/RAM, mic/camera, clipboard, memory trim
-src/spotlight.rs    launcher index, search and calculator
-src/settings.rs     settings file and autostart
-src/apps.rs         installed programs, uninstall, leftovers, startup entries
-src/actions.rs      Spotlight actions: power, timers, quitting programs, unit conversion
-src/clipboard.rs    clipboard history and pins
-src/notes.rs        quick notes
-src/update.rs       release check, verified download, in-place swap
-src/focus.rs        focus timer
-```
+Bug reports, ideas and pull requests are welcome.
 
-## Privacy
+- **Found a bug or want a feature?** Open an [issue](https://github.com/aw4e/Camel/issues). For a bug, say which Windows
+  version and which player or app was involved, and what you expected.
+- **Sending code?** Keep the checks above green, add a test for logic that can be tested without a window, and keep layout
+  numbers in `src/layout.rs` rather than in the drawing code. One change per pull request keeps review quick.
+- **Security problem?** Please do not post details in a public issue. Use **Report a vulnerability** on the repository's
+  Security tab, or open an issue that only says you found one and ask for a private channel.
 
-Camel makes two kinds of network request. With synced lyrics on, it sends the current artist, track title and
-duration to lrclib.net to fetch lyrics. With **Check for updates** on, it asks api.github.com for the latest release of
-this repository, which reveals your IP address and nothing else of yours. Turn both off and it makes none. Settings
-stay on your machine.
-The web row in Spotlight only opens your browser when you pick it.
+By contributing you agree that your work is released under the same [MIT License](LICENSE).
 
-The Apps tab reads the Windows registry and file system on your machine and sends nothing anywhere. Leftover
-cleanup only offers folders named exactly like the program (or its install folder) under the usual data locations,
-never registry keys, and only moves them to the Recycle Bin when you click **Clean up**. Camel remembers a finished
-uninstall in `%APPDATA%\Camel\uninstall.json` until you clean up or dismiss it, so closing Camel does not lose the
-list and a failed clean up can be retried. Files that Windows will not release (a shell extension Explorer still has
-loaded, for example) are queued for deletion at the next restart.
+## License and credits
 
-Clipboard history lives in memory and disappears when Camel quits. Turn **Clipboard history** off in settings and
-Camel stops reading the clipboard altogether.
-
-## License
-
-Camel is released under the [MIT License](LICENSE): use it, change it, share it, even sell it, as long as the
-copyright notice stays. Contributions are welcome through issues and pull requests, and they are accepted under the
-same license.
-
-## Credits
+Camel is released under the [MIT License](LICENSE): use it, change it, share it, even sell it, as long as the copyright
+notice stays.
 
 - Font: Open Sans, embedded in the exe, under the SIL Open Font License ([assets/OFL.txt](assets/OFL.txt)).
+- Lyrics: [lrclib.net](https://lrclib.net).
 - The Rust crates Camel is built from keep their own licenses (MIT, Apache-2.0 and similar).
-
-## Notes
-
-- Windows only. It relies on Windows media controls, WASAPI, the registry and DWM.
-- Spotlight indexes up to 60,000 files, and the index lives in memory only.
-- The Apps tab covers classic desktop programs. Microsoft Store apps, Windows updates and hidden system components are
-  not listed, and switching off a machine-wide startup entry needs Camel to run as administrator.
-- Mic/camera dots read the Windows privacy consent store, so they follow what Windows itself reports.
+- Logo, app icon and favicon live in `assets/brand/`. See [assets/brand/BRAND.md](assets/brand/BRAND.md) for colors, sizes
+  and usage.
