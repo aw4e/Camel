@@ -18,7 +18,7 @@ Written in Rust with [egui](https://github.com/emilk/egui) (glow backend). About
 
 | | |
 |---|---|
-| **Now playing** | Title, artist, album art, seek bar and transport controls for any app that talks to Windows media controls (Spotify, browsers, players). Synced lyrics from [lrclib.net](https://lrclib.net). |
+| **Now playing** | Title, artist, album art, seek bar and transport controls for any app that talks to Windows media controls (Spotify, browsers, players). Synced lyrics from [lrclib.net](https://lrclib.net): messy names from YouTube (`Artist - Song (Official Video)`, `Artist - Topic`, `ArtistVEVO`) are cleaned and searched several ways, and a result is only used when its title and length match. Players that report no timeline (some browser tabs) show no lyrics, because there is no position to follow. |
 | **Shelf** | Drag files onto the notch to park them, click to open, right-click to remove. |
 | **Clipboard history** | The last eight things you copied, text and pictures. Click one to copy it again, right-click to remove it, or clear them all. Hover a row to pin it (up to four): a pinned item stays on top, survives new copies and Clear. A picture shows a thumbnail, its size and how much memory it takes. Pictures are kept as compressed PNG, 24 MB at most in total, and the oldest go first. Kept in memory only, never saved to disk, and anything a password manager marks as sensitive is skipped. |
 | **Clock** | Time, date and the whole month, with today marked. The notch grows by 14 px in months that need six rows. |
@@ -143,7 +143,8 @@ src/layout.rs       golden-ratio and Fibonacci layout tokens, with tests
 src/platform.rs     tray, hotkey, fonts, window frame, elevation
 src/widgets.rs      small drawing and input helpers
 src/ui.rs           icons, sliders, switches, notch shape
-src/media.rs        Windows media session worker and lyrics
+src/media.rs        Windows media session worker
+src/lyrics.rs       lrclib lookup, name cleaning, LRC parsing
 src/mixer.rs        WASAPI master and per-app volume, mute
 src/monitor.rs      battery, CPU/RAM, mic/camera, clipboard, memory trim
 src/spotlight.rs    launcher index, search and calculator

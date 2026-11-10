@@ -5,6 +5,7 @@ mod apps;
 mod clipboard;
 mod focus;
 mod layout;
+mod lyrics;
 mod media;
 mod mixer;
 mod monitor;

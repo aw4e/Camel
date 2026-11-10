@@ -1,6 +1,6 @@
 //! Now-playing via Windows SMTC. Worker thread polls twice a second and executes commands.
 
-use serde::Deserialize;
+use crate::lyrics::{self, Lyrics};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::Duration;
@@ -24,9 +24,6 @@ pub struct State {
     pub dur: f64,
     pub lyrics: Option<Arc<Lyrics>>,
 }
-
-/// (start seconds, text), sorted by time
-pub type Lyrics = Vec<(f64, String)>;
 
 pub struct LyricsCtx {
     pub enabled: AtomicBool,
@@ -114,7 +111,8 @@ fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &
     let prev = shared.lock().unwrap_or_else(PoisonError::into_inner).clone();
     let art = if prev.title == title && prev.artist == artist { prev.art } else { fetch_art(&props).ok().map(Arc::new) };
     let (pos, dur) = timeline(&session, playing).unwrap_or((0.0, 0.0));
-    let lyrics = lyrics_for(lyr, &artist, &title, dur);
+    // without a timeline there is no position to follow, so the lines would never advance
+    let lyrics = lyrics_for(lyr, &artist, &title, dur).filter(|_| dur > 0.0);
     *shared.lock().unwrap_or_else(PoisonError::into_inner) = State { title, artist, playing, art, pos, dur, lyrics };
     Ok(())
 }
@@ -149,9 +147,10 @@ fn timeline(session: &windows::Media::Control::GlobalSystemMediaTransportControl
     Ok((pos.clamp(0.0, dur.max(0.0)), dur.max(0.0)))
 }
 
-/// Kicks off one fetch per track and returns the lyrics once they belong to the current track.
+/// Kicks off one fetch per track and returns the lyrics once they belong to the current track. A fetch that failed
+/// because the server could not be reached is tried again after a pause.
 fn lyrics_for(lyr: &Arc<LyricsCtx>, artist: &str, title: &str, dur: f64) -> Option<Arc<Lyrics>> {
-    if !lyr.enabled.load(Ordering::Relaxed) || dur <= 0.0 {
+    if !lyr.enabled.load(Ordering::Relaxed) || title.trim().is_empty() {
         return None;
     }
     let key = format!(
@@ -163,67 +162,18 @@ fn lyrics_for(lyr: &Arc<LyricsCtx>, artist: &str, title: &str, dur: f64) -> Opti
         if *req != key {
             req.clone_from(&key);
             let (l, a, t, k) = (lyr.clone(), artist.to_owned(), title.to_owned(), key.clone());
-            std::thread::spawn(move || {
-                if let Some(v) = fetch_lyrics(&a, &t, dur) {
-                    *l.slot.lock().unwrap_or_else(PoisonError::into_inner) = Some((k, Arc::new(v)));
+            std::thread::spawn(move || match lyrics::fetch(&a, &t, dur) {
+                Ok(Some(v)) => *l.slot.lock().unwrap_or_else(PoisonError::into_inner) = Some((k, Arc::new(v))),
+                Ok(None) => {}
+                Err(()) => {
+                    std::thread::sleep(Duration::from_secs(15));
+                    let mut req = l.requested.lock().unwrap_or_else(PoisonError::into_inner);
+                    if *req == k {
+                        req.clear();
+                    }
                 }
             });
         }
     }
     lyr.slot.lock().unwrap_or_else(PoisonError::into_inner).as_ref().filter(|(k, _)| *k == key).map(|(_, v)| v.clone())
-}
-
-#[derive(Deserialize)]
-struct LrcResp {
-    #[serde(rename = "syncedLyrics")]
-    synced: Option<String>,
-}
-
-fn fetch_lyrics(artist: &str, title: &str, dur: f64) -> Option<Lyrics> {
-    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(8))).build().into();
-    let mut resp = agent
-        .get("https://lrclib.net/api/get")
-        .query("artist_name", artist)
-        .query("track_name", title)
-        .query("duration", (dur.round() as u64).to_string())
-        .call()
-        .ok()?;
-    parse_lrc(&resp.body_mut().read_json::<LrcResp>().ok()?.synced?)
-}
-
-/// "[01:23.45] text" lines, possibly with several timestamps per line.
-fn parse_lrc(src: &str) -> Option<Lyrics> {
-    let mut out = Lyrics::new();
-    for line in src.lines() {
-        let mut rest = line.trim();
-        let mut times = Vec::new();
-        while let Some(tail) = rest.strip_prefix('[') {
-            let Some((stamp, after)) = tail.split_once(']') else { break };
-            let Some((m, s)) = stamp.split_once(':') else { break };
-            let (Ok(m), Ok(s)) = (m.parse::<f64>(), s.parse::<f64>()) else { break };
-            times.push(m * 60.0 + s);
-            rest = after;
-        }
-        out.extend(times.into_iter().map(|t| (t, rest.trim().to_owned())));
-    }
-    out.sort_by(|a, b| a.0.total_cmp(&b.0));
-    (!out.is_empty()).then_some(out)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_lrc;
-
-    #[test]
-    fn parses_lrc() {
-        let l = parse_lrc(
-            "[00:01.50] hi
-[00:03.00][00:05.25] again
-[ar:x]",
-        )
-        .unwrap();
-        assert_eq!(l.len(), 3);
-        assert_eq!(l[0], (1.5, "hi".to_owned()));
-        assert_eq!(l[2], (5.25, "again".to_owned()));
-    }
 }
