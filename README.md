@@ -16,7 +16,7 @@ Written in Rust with [egui](https://github.com/emilk/egui) (glow backend). About
 
 ## Features
 
-| | |
+| Feature | What it does |
 |---|---|
 | **Now playing** | Title, artist, album art, seek bar and transport controls for any app that uses Windows media controls (Spotify, browsers, players), with synced lyrics from [lrclib.net](https://lrclib.net). |
 | **Shelf** | Drag files onto the notch to park them, click to open, right-click to remove. |
