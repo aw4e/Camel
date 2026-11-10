@@ -1,7 +1,7 @@
 //! Spotlight search: calculator, apps (Start Menu) and files (user folders).
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 use windows::core::{HSTRING, w};
@@ -11,10 +11,14 @@ pub enum Kind {
     Calc,
     App,
     File,
+    Web,
+    /// A system action, timer or similar; `Hit::action` says which.
+    Action,
 }
 
 #[derive(Clone)]
 pub struct Hit {
+    pub action: Option<crate::actions::Action>,
     pub kind: Kind,
     pub title: String,
     pub detail: String,
@@ -43,13 +47,13 @@ pub fn build_index() -> Index {
                 walk(&dir, 6, true, &mut all);
             }
         }
-        *out.lock().unwrap() = all.clone();
+        *out.lock().unwrap_or_else(PoisonError::into_inner) = all.clone();
         if let Some(home) = std::env::var_os("USERPROFILE") {
             for d in ["Desktop", "Documents", "Downloads"] {
                 walk(&Path::new(&home).join(d), 4, false, &mut all);
             }
         }
-        *out.lock().unwrap() = all;
+        *out.lock().unwrap_or_else(PoisonError::into_inner) = all;
     });
     index
 }
@@ -82,17 +86,24 @@ fn walk(dir: &Path, depth: u32, apps: bool, out: &mut Vec<Entry>) {
     }
 }
 
-pub fn search(index: &Index, query: &str) -> Vec<Hit> {
+/// `awake` is the keep-awake state, so its row can offer to turn it off.
+pub fn search(index: &Index, query: &str, awake: bool) -> Vec<Hit> {
     let q = query.trim().to_lowercase();
     if q.is_empty() {
         return Vec::new();
     }
     let mut hits = Vec::new();
     if let Some(v) = calc(&q) {
-        hits.push(Hit { kind: Kind::Calc, title: fmt_num(v), detail: format!("{query} ="), path: PathBuf::new() });
+        hits.push(Hit { action: None, kind: Kind::Calc, title: fmt_num(v), detail: format!("{query} ="), path: PathBuf::new() });
+    }
+    if let Some((title, detail)) = crate::actions::convert(query) {
+        hits.push(Hit { action: None, kind: Kind::Calc, title, detail, path: PathBuf::new() });
+    }
+    for s in crate::actions::suggest(query, awake) {
+        hits.push(Hit { action: Some(s.action), kind: Kind::Action, title: s.title, detail: s.detail, path: PathBuf::new() });
     }
     let mut scored: Vec<(u8, &Entry)> = Vec::new();
-    let guard = index.0.lock().unwrap();
+    let guard = index.0.lock().unwrap_or_else(PoisonError::into_inner);
     for e in guard.iter() {
         let rank = if e.lower.starts_with(&q) {
             0
@@ -105,15 +116,41 @@ pub fn search(index: &Index, query: &str) -> Vec<Hit> {
     }
     scored.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.lower.len().cmp(&b.1.lower.len())));
     scored.dedup_by(|a, b| a.1.lower == b.1.lower && a.1.app == b.1.app);
-    for (_, e) in scored.into_iter().take(6 - hits.len()) {
+    for (_, e) in scored.into_iter().take(5usize.saturating_sub(hits.len())) {
         hits.push(Hit {
+            action: None,
             kind: if e.app { Kind::App } else { Kind::File },
             title: e.name.clone(),
             detail: e.path.parent().map(|p| p.display().to_string()).unwrap_or_default(),
             path: e.path.clone(),
         });
     }
+    hits.push(web_hit(query.trim()));
     hits
+}
+
+/// Last row of every search: open the text as a link if it is one, otherwise search the web for it.
+fn web_hit(q: &str) -> Hit {
+    let direct = q.starts_with("http://") || q.starts_with("https://") || q.starts_with("www.");
+    let (title, detail, url) = if direct {
+        let url = if q.starts_with("www.") { format!("https://{q}") } else { q.to_owned() };
+        (format!("Open {q}"), "Default browser".to_owned(), url)
+    } else {
+        (format!("Search the web for \"{q}\""), "DuckDuckGo".to_owned(), format!("https://duckduckgo.com/?q={}", url_encode(q)))
+    };
+    Hit { action: None, kind: Kind::Web, title, detail, path: PathBuf::from(url) }
+}
+
+fn url_encode(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            b' ' => out.push('+'),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 pub fn launch(path: &Path) {
@@ -209,7 +246,16 @@ impl Parser<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::calc;
+    use super::{Kind, calc, url_encode, web_hit};
+
+    #[test]
+    fn web_hits() {
+        assert_eq!(url_encode("a b&c/é"), "a+b%26c%2F%C3%A9");
+        let s = web_hit("rust lang");
+        assert!(s.kind == Kind::Web && s.path.to_string_lossy() == "https://duckduckgo.com/?q=rust+lang");
+        assert_eq!(web_hit("www.example.com").path.to_string_lossy(), "https://www.example.com");
+        assert_eq!(web_hit("https://a.b/c?d=1").path.to_string_lossy(), "https://a.b/c?d=1");
+    }
 
     #[test]
     fn evaluates() {

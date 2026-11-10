@@ -4,8 +4,8 @@ use std::ptr::null;
 use sysinfo::{Pid, ProcessesToUpdate, System};
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{
-    AudioSessionStateActive, IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator, ISimpleAudioVolume,
-    MMDeviceEnumerator, eConsole, eRender,
+    AudioSessionStateActive, IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator, ISimpleAudioVolume, MMDeviceEnumerator, eCapture, eConsole,
+    eRender,
 };
 use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance};
 use windows::core::Interface;
@@ -49,11 +49,7 @@ impl Mixer {
                 }
                 let ctl2: IAudioSessionControl2 = session.cast()?;
                 // returns S_OK (0) for system sounds, S_FALSE (1) for others; both count as is_ok()
-                let name = if ctl2.IsSystemSoundsSession().0 == 0 {
-                    "System sounds".to_owned()
-                } else {
-                    self.process_name(ctl2.GetProcessId()?)
-                };
+                let name = if ctl2.IsSystemSoundsSession().0 == 0 { "System sounds".to_owned() } else { self.process_name(ctl2.GetProcessId()?) };
                 let ctl: ISimpleAudioVolume = session.cast()?;
                 apps.push(AppVolume { name, level: ctl.GetMasterVolume()?, ctl });
             }
@@ -84,5 +80,35 @@ impl Mixer {
             a.level = v;
             let _ = unsafe { a.ctl.SetMasterVolume(v, null()) };
         }
+    }
+}
+
+/// Master volume and mute only: one COM call per read, so Camel can watch it all the time for the volume HUD.
+pub struct Master(IAudioEndpointVolume);
+
+impl Master {
+    pub fn new() -> Option<Self> {
+        unsafe {
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+            let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+            Some(Self(device.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None).ok()?))
+        }
+    }
+
+    /// (level 0..1, muted); None once the device is gone.
+    pub fn read(&self) -> Option<(f32, bool)> {
+        unsafe { Some((self.0.GetMasterVolumeLevelScalar().ok()?, self.0.GetMute().ok()?.as_bool())) }
+    }
+}
+
+/// Flips mute on the default speakers (or microphone) and returns the new state; None when there is no such device.
+pub fn toggle_mute(mic: bool) -> Option<bool> {
+    unsafe {
+        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        let device = enumerator.GetDefaultAudioEndpoint(if mic { eCapture } else { eRender }, eConsole).ok()?;
+        let volume = device.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None).ok()?;
+        let muted = !volume.GetMute().ok()?.as_bool();
+        volume.SetMute(muted, null()).ok()?;
+        Some(muted)
     }
 }

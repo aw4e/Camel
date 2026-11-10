@@ -1,13 +1,10 @@
-//! Now-playing via Windows SMTC. Worker thread polls once a second and executes commands.
+//! Now-playing via Windows SMTC. Worker thread polls twice a second and executes commands.
 
 use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::Duration;
-use windows::Media::Control::{
-    GlobalSystemMediaTransportControlsSessionManager as Manager,
-    GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
-};
+use windows::Media::Control::{GlobalSystemMediaTransportControlsSessionManager as Manager, GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status};
 use windows::Storage::Streams::DataReader;
 use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize};
 
@@ -52,7 +49,7 @@ pub struct Handle {
 
 impl Handle {
     pub fn state(&self) -> State {
-        self.state.lock().unwrap().clone()
+        self.state.lock().unwrap_or_else(PoisonError::into_inner).clone()
     }
 
     pub fn send(&self, c: Cmd) {
@@ -64,11 +61,7 @@ pub fn spawn(lyrics_enabled: bool) -> Handle {
     let state = Arc::new(Mutex::new(State::default()));
     let (tx, rx) = mpsc::channel();
     let shared = state.clone();
-    let lyr = Arc::new(LyricsCtx {
-        enabled: AtomicBool::new(lyrics_enabled),
-        requested: Mutex::new(String::new()),
-        slot: Mutex::new(None),
-    });
+    let lyr = Arc::new(LyricsCtx { enabled: AtomicBool::new(lyrics_enabled), requested: Mutex::new(String::new()), slot: Mutex::new(None) });
     let worker_lyr = lyr.clone();
     std::thread::spawn(move || {
         unsafe { RoInitialize(RO_INIT_MULTITHREADED).ok() };
@@ -99,7 +92,7 @@ fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &
         None => mgr.insert(Manager::RequestAsync()?.join()?),
     };
     let Ok(session) = mgr.GetCurrentSession() else {
-        *shared.lock().unwrap() = State::default();
+        *shared.lock().unwrap_or_else(PoisonError::into_inner) = State::default();
         return Ok(());
     };
 
@@ -118,21 +111,15 @@ fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &
     let playing = session.GetPlaybackInfo()?.PlaybackStatus()? == Status::Playing;
 
     // Only re-fetch art when the track changes; reuse the old Arc otherwise.
-    let prev = shared.lock().unwrap().clone();
-    let art = if prev.title == title && prev.artist == artist {
-        prev.art
-    } else {
-        fetch_art(&props).ok().map(Arc::new)
-    };
+    let prev = shared.lock().unwrap_or_else(PoisonError::into_inner).clone();
+    let art = if prev.title == title && prev.artist == artist { prev.art } else { fetch_art(&props).ok().map(Arc::new) };
     let (pos, dur) = timeline(&session, playing).unwrap_or((0.0, 0.0));
     let lyrics = lyrics_for(lyr, &artist, &title, dur);
-    *shared.lock().unwrap() = State { title, artist, playing, art, pos, dur, lyrics };
+    *shared.lock().unwrap_or_else(PoisonError::into_inner) = State { title, artist, playing, art, pos, dur, lyrics };
     Ok(())
 }
 
-fn fetch_art(
-    props: &windows::Media::Control::GlobalSystemMediaTransportControlsSessionMediaProperties,
-) -> Result<Art, Box<dyn std::error::Error>> {
+fn fetch_art(props: &windows::Media::Control::GlobalSystemMediaTransportControlsSessionMediaProperties) -> Result<Art, Box<dyn std::error::Error>> {
     let stream = props.Thumbnail()?.OpenReadAsync()?.join()?;
     let len = stream.Size()? as u32;
     let reader = DataReader::CreateDataReader(&stream)?;
@@ -140,15 +127,16 @@ fn fetch_art(
     let mut buf = vec![0u8; len as usize];
     reader.ReadBytes(&mut buf)?;
 
-    let img = image::load_from_memory(&buf)?.thumbnail(256, 256).to_rgba8();
+    // Players hand over 16:9 thumbnails as often as square art; the UI draws a square, so cover-crop the centre
+    // instead of stretching.
+    let full = image::load_from_memory(&buf)?;
+    let side = full.width().min(full.height());
+    let img = full.crop_imm((full.width() - side) / 2, (full.height() - side) / 2, side, side).thumbnail(256, 256).to_rgba8();
     Ok(Art { size: [img.width() as usize, img.height() as usize], rgba: img.into_raw() })
 }
 
 /// Position is a snapshot taken at LastUpdatedTime, so add the time elapsed since while playing.
-fn timeline(
-    session: &windows::Media::Control::GlobalSystemMediaTransportControlsSession,
-    playing: bool,
-) -> windows::core::Result<(f64, f64)> {
+fn timeline(session: &windows::Media::Control::GlobalSystemMediaTransportControlsSession, playing: bool) -> windows::core::Result<(f64, f64)> {
     let t = session.GetTimelineProperties()?;
     let secs = |ticks: i64| ticks as f64 / 1e7;
     let dur = secs(t.EndTime()?.Duration - t.StartTime()?.Duration);
@@ -166,21 +154,23 @@ fn lyrics_for(lyr: &Arc<LyricsCtx>, artist: &str, title: &str, dur: f64) -> Opti
     if !lyr.enabled.load(Ordering::Relaxed) || dur <= 0.0 {
         return None;
     }
-    let key = format!("{artist}
-{title}");
+    let key = format!(
+        "{artist}
+{title}"
+    );
     {
-        let mut req = lyr.requested.lock().unwrap();
+        let mut req = lyr.requested.lock().unwrap_or_else(PoisonError::into_inner);
         if *req != key {
             req.clone_from(&key);
             let (l, a, t, k) = (lyr.clone(), artist.to_owned(), title.to_owned(), key.clone());
             std::thread::spawn(move || {
                 if let Some(v) = fetch_lyrics(&a, &t, dur) {
-                    *l.slot.lock().unwrap() = Some((k, Arc::new(v)));
+                    *l.slot.lock().unwrap_or_else(PoisonError::into_inner) = Some((k, Arc::new(v)));
                 }
             });
         }
     }
-    lyr.slot.lock().unwrap().as_ref().filter(|(k, _)| *k == key).map(|(_, v)| v.clone())
+    lyr.slot.lock().unwrap_or_else(PoisonError::into_inner).as_ref().filter(|(k, _)| *k == key).map(|(_, v)| v.clone())
 }
 
 #[derive(Deserialize)]
@@ -226,9 +216,12 @@ mod tests {
 
     #[test]
     fn parses_lrc() {
-        let l = parse_lrc("[00:01.50] hi
+        let l = parse_lrc(
+            "[00:01.50] hi
 [00:03.00][00:05.25] again
-[ar:x]").unwrap();
+[ar:x]",
+        )
+        .unwrap();
         assert_eq!(l.len(), 3);
         assert_eq!(l[0], (1.5, "hi".to_owned()));
         assert_eq!(l[2], (5.25, "again".to_owned()));

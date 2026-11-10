@@ -1,8 +1,6 @@
 //! Drawing helpers: vector icons and small widgets. All colours arrive pre-faded by the caller.
 
-use eframe::egui::{
-    self, Color32, FontFamily, FontId, Mesh, Painter, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Ui, Vec2, pos2, vec2,
-};
+use eframe::egui::{self, Color32, FontFamily, FontId, Mesh, Painter, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
 
 // macOS dark system palette. GRAY / DIM are secondary / tertiary label.
 pub const GRAY: Color32 = Color32::from_gray(152);
@@ -34,16 +32,92 @@ pub fn fade(c: Color32, f: f32) -> Color32 {
     c.gamma_multiply(f)
 }
 
-fn tri(p: &Painter, pts: [Pos2; 3], col: Color32) {
-    p.add(Shape::convex_polygon(pts.to_vec(), col, Stroke::NONE));
+// ---- icons: one drawing language (SF Symbols-like): 1.5 stroke, rounded corners, round caps, ~18 px box.
+// They are original drawings, not Apple's symbols (those may not leave Apple platforms).
+
+const W: f32 = 1.5;
+
+fn at(c: Pos2, q: (f32, f32)) -> Pos2 {
+    c + vec2(q.0, q.1)
+}
+
+/// Rounds every corner of a polygon / polyline with a quadratic curve of radius `r`.
+fn rpoly(pts: &[Pos2], r: f32, closed: bool) -> Vec<Pos2> {
+    let n = pts.len();
+    let mut out = Vec::new();
+    for i in 0..n {
+        let v = pts[i];
+        if r <= 0.01 || (!closed && (i == 0 || i == n - 1)) {
+            out.push(v);
+            continue;
+        }
+        let (d1, d2) = (pts[(i + n - 1) % n] - v, pts[(i + 1) % n] - v);
+        let (l1, l2) = (d1.length().max(0.001), d2.length().max(0.001));
+        let d = r.min(l1 / 2.0).min(l2 / 2.0);
+        out.extend(quad(v + d1 / l1 * d, v, v + d2 / l2 * d, 6));
+    }
+    out
+}
+
+/// Stroked outline with rounded corners (closed) or a polyline with round caps (open).
+fn path(p: &Painter, c: Pos2, pts: &[(f32, f32)], r: f32, closed: bool, w: f32, col: Color32) {
+    let v = rpoly(&pts.iter().map(|q| at(c, *q)).collect::<Vec<_>>(), r, closed);
+    if closed {
+        p.add(Shape::closed_line(v, Stroke::new(w, col)));
+    } else {
+        let (a, b) = (v[0], v[v.len() - 1]);
+        p.add(Shape::line(v, Stroke::new(w, col)));
+        p.circle_filled(a, w / 2.0, col);
+        p.circle_filled(b, w / 2.0, col);
+    }
+}
+
+fn seg(p: &Painter, c: Pos2, a: (f32, f32), b: (f32, f32), w: f32, col: Color32) {
+    path(p, c, &[a, b], 0.0, false, w, col);
+}
+
+/// Filled convex shape with rounded corners.
+fn solid(p: &Painter, c: Pos2, pts: &[(f32, f32)], r: f32, col: Color32) {
+    p.add(Shape::convex_polygon(rpoly(&pts.iter().map(|q| at(c, *q)).collect::<Vec<_>>(), r, true), col, Stroke::NONE));
+}
+
+fn arc(p: &Painter, c: Pos2, centre: (f32, f32), rad: f32, a0: f32, a1: f32, col: Color32) {
+    let pts: Vec<(f32, f32)> = (0..=16)
+        .map(|i| {
+            let a = a0 + (a1 - a0) * i as f32 / 16.0;
+            (centre.0 + rad * a.cos(), centre.1 + rad * a.sin())
+        })
+        .collect();
+    path(p, c, &pts, 0.0, false, W, col);
 }
 
 fn bar(p: &Painter, c: Pos2, w: f32, h: f32, col: Color32) {
-    p.rect_filled(Rect::from_center_size(c, vec2(w, h)), 1.5, col);
+    p.rect_filled(Rect::from_center_size(c, vec2(w, h)), 2.0, col);
+}
+
+/// Icons are drawn at 16 px. Inside a button they keep one Fibonacci step (5 px) of padding above and below, never
+/// scaled below half size or above full size: a 24 px pill gets a 14 px icon.
+pub fn icon_fit(container_h: f32) -> f32 {
+    ((container_h - 10.0) / 16.0).clamp(0.5, 1.0)
+}
+
+/// Runs `draw` and scales whatever it painted by `s` about `c`: positions, radii and stroke widths together, so the
+/// icons keep their shape at any size without carrying a scale parameter.
+pub fn scaled(p: &Painter, c: Pos2, s: f32, draw: impl FnOnce()) {
+    let start = p.add(Shape::Noop).0;
+    draw();
+    let end = p.add(Shape::Noop).0;
+    let t = egui::emath::TSTransform::new(c.to_vec2() * (1.0 - s), s);
+    p.ctx().graphics_mut(|g| {
+        let list = g.entry(p.layer_id());
+        for i in start..end {
+            list.mutate_shape(egui::layers::ShapeIdx(i), |cs| cs.shape.transform(t));
+        }
+    });
 }
 
 pub fn icon_play(p: &Painter, c: Pos2, col: Color32) {
-    tri(p, [c + vec2(-6.0, -10.0), c + vec2(-6.0, 10.0), c + vec2(10.0, 0.0)], col);
+    solid(p, c, &[(-6.0, -10.0), (-6.0, 10.0), (10.0, 0.0)], 2.6, col);
 }
 
 pub fn icon_pause(p: &Painter, c: Pos2, col: Color32) {
@@ -52,108 +126,158 @@ pub fn icon_pause(p: &Painter, c: Pos2, col: Color32) {
 }
 
 pub fn icon_next(p: &Painter, c: Pos2, col: Color32) {
-    tri(p, [c + vec2(-8.0, -6.5), c + vec2(-8.0, 6.5), c + vec2(2.0, 0.0)], col);
-    bar(p, c + vec2(5.5, 0.0), 2.5, 13.0, col);
+    solid(p, c, &[(-8.0, -6.5), (-8.0, 6.5), (2.0, 0.0)], 1.6, col);
+    bar(p, c + vec2(5.5, 0.0), 2.8, 13.0, col);
 }
 
 pub fn icon_prev(p: &Painter, c: Pos2, col: Color32) {
-    tri(p, [c + vec2(8.0, -6.5), c + vec2(8.0, 6.5), c + vec2(-2.0, 0.0)], col);
-    bar(p, c + vec2(-5.5, 0.0), 2.5, 13.0, col);
+    solid(p, c, &[(8.0, -6.5), (8.0, 6.5), (-2.0, 0.0)], 1.6, col);
+    bar(p, c + vec2(-5.5, 0.0), 2.8, 13.0, col);
 }
 
-fn line(p: &Painter, pts: &[Pos2], w: f32, col: Color32) {
-    p.add(Shape::line(pts.to_vec(), Stroke::new(w, col)));
+pub fn icon_music(p: &Painter, c: Pos2, col: Color32) {
+    music_note(p, c, col, 1.0);
 }
 
-pub fn icon_home(p: &Painter, c: Pos2, col: Color32) {
-    line(p, &[c + vec2(-7.0, 0.0), c + vec2(0.0, -6.5), c + vec2(7.0, 0.0)], 1.6, col);
-    line(p, &[c + vec2(-5.0, -1.5), c + vec2(-5.0, 6.0), c + vec2(5.0, 6.0), c + vec2(5.0, -1.5)], 1.6, col);
-}
-
-pub fn icon_tray(p: &Painter, c: Pos2, col: Color32) {
-    line(p, &[c + vec2(-7.0, -1.0), c + vec2(-7.0, 6.0), c + vec2(7.0, 6.0), c + vec2(7.0, -1.0)], 1.6, col);
-    line(p, &[c + vec2(-3.0, -2.0), c + vec2(0.0, 1.5), c + vec2(3.0, -2.0)], 1.6, col);
-    line(p, &[c + vec2(0.0, -7.0), c + vec2(0.0, 1.5)], 1.6, col);
-}
-
-pub fn icon_clock(p: &Painter, c: Pos2, col: Color32) {
-    p.circle_stroke(c, 7.0, Stroke::new(1.6, col));
-    line(p, &[c + vec2(0.0, -4.0), c, c + vec2(3.5, 2.0)], 1.6, col);
+/// Pair of notes under a thick beam, at `s` times the tab-bar size. Also the placeholder where cover art would be.
+pub fn music_note(p: &Painter, c: Pos2, col: Color32, s: f32) {
+    let q = |x: f32, y: f32| at(c, (x * s, y * s));
+    p.circle_filled(q(-4.6, 4.8), 2.6 * s, col);
+    p.circle_filled(q(4.4, 3.2), 2.6 * s, col);
+    seg(p, c, (-2.4 * s, 4.8 * s), (-2.4 * s, -5.0 * s), W * s, col);
+    seg(p, c, (6.6 * s, 3.2 * s), (6.6 * s, -6.5 * s), W * s, col);
+    p.add(Shape::convex_polygon(vec![q(-2.4, -6.6), q(6.6, -8.1), q(6.6, -4.7), q(-2.4, -3.2)], col, Stroke::NONE));
 }
 
 pub fn icon_speaker(p: &Painter, c: Pos2, col: Color32) {
     p.add(Shape::convex_polygon(
-        vec![c + vec2(-7.0, -2.5), c + vec2(-3.5, -2.5), c + vec2(0.0, -6.0), c + vec2(0.0, 6.0), c + vec2(-3.5, 2.5), c + vec2(-7.0, 2.5)],
+        [(-7.5, -2.6), (-4.2, -2.6), (0.5, -6.8), (0.5, 6.8), (-4.2, 2.6), (-7.5, 2.6)].iter().map(|q| at(c, *q)).collect(),
         col,
         Stroke::NONE,
     ));
-    for (r, s) in [(3.5_f32, 1.4_f32), (6.5, 1.4)] {
-        let arc: Vec<Pos2> = (-4..=4).map(|i| {
-            let a = i as f32 * 0.2;
-            c + vec2(1.0 + r * a.cos(), r * a.sin())
-        }).collect();
-        line(p, &arc, s, col);
+    arc(p, c, (1.2, 0.0), 4.0, -0.85, 0.85, col);
+    arc(p, c, (1.2, 0.0), 7.2, -0.85, 0.85, col);
+}
+
+pub fn icon_clock(p: &Painter, c: Pos2, col: Color32) {
+    p.circle_stroke(c, 7.4, Stroke::new(W, col));
+    path(p, c, &[(0.0, -4.2), (0.0, 0.0), (3.4, 2.0)], 0.0, false, W, col);
+}
+
+pub fn icon_timer(p: &Painter, c: Pos2, col: Color32) {
+    seg(p, c, (-5.8, -7.6), (5.8, -7.6), W, col);
+    seg(p, c, (-5.8, 7.6), (5.8, 7.6), W, col);
+    path(p, c, &[(-4.4, -7.6), (-4.4, -4.6), (0.0, 0.0), (-4.4, 4.6), (-4.4, 7.6)], 1.6, false, W, col);
+    path(p, c, &[(4.4, -7.6), (4.4, -4.6), (0.0, 0.0), (4.4, 4.6), (4.4, 7.6)], 1.6, false, W, col);
+}
+
+pub fn icon_tray(p: &Painter, c: Pos2, col: Color32) {
+    path(p, c, &[(-7.5, -0.5), (-7.5, 5.0), (7.5, 5.0), (7.5, -0.5)], 2.4, false, W, col);
+    seg(p, c, (0.0, -7.5), (0.0, 1.6), W, col);
+    path(p, c, &[(-3.3, -1.6), (0.0, 1.7), (3.3, -1.6)], 0.0, false, W, col);
+}
+
+pub fn icon_clipboard(p: &Painter, c: Pos2, col: Color32) {
+    p.rect_stroke(Rect::from_center_size(c + vec2(0.0, 1.2), vec2(13.0, 15.5)), 2.6, Stroke::new(W, col), StrokeKind::Inside);
+    p.rect_filled(Rect::from_center_size(c + vec2(0.0, -7.0), vec2(7.2, 3.4)), 1.7, col);
+    seg(p, c, (-3.0, 0.0), (3.0, 0.0), W, col);
+    seg(p, c, (-3.0, 3.6), (1.4, 3.6), W, col);
+}
+
+pub fn icon_grid(p: &Painter, c: Pos2, col: Color32) {
+    for (dx, dy) in [(-4.0, -4.0), (4.0, -4.0), (-4.0, 4.0), (4.0, 4.0)] {
+        p.rect_filled(Rect::from_center_size(c + vec2(dx, dy), vec2(6.6, 6.6)), 2.0, col);
     }
 }
 
 pub fn icon_gear(p: &Painter, c: Pos2, col: Color32) {
-    p.circle_stroke(c, 3.0, Stroke::new(1.6, col));
-    for i in 0..8 {
-        let a = i as f32 * std::f32::consts::FRAC_PI_4;
-        let (s, co) = a.sin_cos();
-        line(p, &[c + vec2(co, s) * 5.2, c + vec2(co, s) * 7.2], 2.2, col);
+    let step = std::f32::consts::FRAC_PI_4;
+    let mut pts = Vec::new();
+    for k in 0..8 {
+        let a = k as f32 * step;
+        for (da, r) in [(-0.34, 5.7), (-0.2, 7.7), (0.2, 7.7), (0.34, 5.7), (step / 2.0, 5.7)] {
+            pts.push(c + vec2((a + da).cos(), (a + da).sin()) * r);
+        }
     }
+    p.add(Shape::closed_line(rpoly(&pts, 0.9, true), Stroke::new(W, col)));
+    p.circle_stroke(c, 2.6, Stroke::new(W, col));
 }
 
-pub fn icon_note(p: &Painter, c: Pos2, col: Color32, scale: f32) {
-    let s = |v: Vec2| c + v * scale;
-    p.circle_filled(s(vec2(-4.0, 6.0)), 3.5 * scale, col);
-    line(p, &[s(vec2(-0.7, 6.0)), s(vec2(-0.7, -8.0)), s(vec2(6.0, -6.0))], 2.0 * scale, col);
-}
-
-pub fn icon_clipboard(p: &Painter, c: Pos2, col: Color32) {
-    p.rect_stroke(Rect::from_center_size(c + vec2(0.0, 1.0), vec2(14.0, 16.0)), 3.0, Stroke::new(1.6, col), StrokeKind::Inside);
-    p.rect_filled(Rect::from_center_size(c + vec2(0.0, -7.0), vec2(7.0, 4.0)), 1.5, col);
-}
-
-pub fn icon_battery(p: &Painter, c: Pos2, col: Color32) {
-    p.rect_stroke(Rect::from_center_size(c, vec2(14.0, 8.0)), 2.0, Stroke::new(1.6, col), StrokeKind::Inside);
-    p.rect_filled(Rect::from_center_size(c + vec2(8.0, 0.0), vec2(2.0, 4.0)), 1.0, col);
-}
-
-pub fn icon_mic(p: &Painter, c: Pos2, col: Color32) {
-    p.rect_filled(Rect::from_center_size(c + vec2(0.0, -2.0), vec2(6.0, 11.0)), 3.0, col);
-    line(p, &[c + vec2(-5.0, 1.0), c + vec2(-5.0, 3.0), c + vec2(0.0, 7.0), c + vec2(5.0, 3.0), c + vec2(5.0, 1.0)], 1.4, col);
-}
-
-pub fn icon_search(p: &Painter, c: Pos2, col: Color32) {
-    p.circle_stroke(c + vec2(-1.5, -1.5), 6.0, Stroke::new(2.0, col));
-    line(p, &[c + vec2(3.0, 3.0), c + vec2(8.0, 8.0)], 2.2, col);
-}
-
-pub fn icon_calc(p: &Painter, c: Pos2, col: Color32) {
-    p.rect_stroke(Rect::from_center_size(c, vec2(14.0, 16.0)), 3.0, Stroke::new(1.6, col), StrokeKind::Inside);
-    line(p, &[c + vec2(-3.0, -3.0), c + vec2(3.0, -3.0)], 1.6, col);
-    line(p, &[c + vec2(-3.0, 2.0), c + vec2(3.0, 2.0)], 1.6, col);
+pub fn icon_folder(p: &Painter, c: Pos2, col: Color32) {
+    path(p, c, &[(-7.8, -5.4), (-2.8, -5.4), (-1.0, -3.2), (7.8, -3.2), (7.8, 5.8), (-7.8, 5.8)], 2.2, true, W, col);
 }
 
 pub fn icon_file(p: &Painter, c: Pos2, col: Color32) {
-    line(p, &[c + vec2(-5.0, -8.0), c + vec2(2.0, -8.0), c + vec2(6.0, -4.0), c + vec2(6.0, 8.0), c + vec2(-5.0, 8.0), c + vec2(-5.0, -8.0)], 1.6, col);
+    path(p, c, &[(-5.6, -8.0), (1.6, -8.0), (6.6, -3.0), (6.6, 8.0), (-5.6, 8.0)], 1.8, true, W, col);
+    path(p, c, &[(1.6, -8.0), (1.6, -3.0), (6.6, -3.0)], 0.8, false, W, col);
+}
+
+pub fn icon_lock(p: &Painter, c: Pos2, col: Color32) {
+    p.rect_stroke(Rect::from_center_size(c + vec2(0.0, 2.5), vec2(12.0, 9.0)), 2.2, Stroke::new(W, col), StrokeKind::Inside);
+    arc(p, c, (0.0, -2.0), 4.0, std::f32::consts::PI, std::f32::consts::TAU, col);
+    p.circle_filled(c + vec2(0.0, 2.5), 1.2, col);
+}
+
+pub fn icon_sleep(p: &Painter, c: Pos2, col: Color32) {
+    path(p, c, &[(-6.5, -1.0), (0.5, -1.0), (-6.5, 7.0), (0.5, 7.0)], 0.0, false, W, col);
+    path(p, c, &[(2.5, -8.0), (6.5, -8.0), (2.5, -4.0), (6.5, -4.0)], 0.0, false, W, col);
+}
+
+pub fn icon_power(p: &Painter, c: Pos2, col: Color32) {
+    let a0 = -std::f32::consts::FRAC_PI_2 + 0.65;
+    arc(p, c, (0.0, 1.0), 6.3, a0, a0 + std::f32::consts::TAU - 1.3, col);
+    seg(p, c, (0.0, -7.5), (0.0, 0.0), W, col);
+}
+
+pub fn icon_sun(p: &Painter, c: Pos2, col: Color32) {
+    p.circle_stroke(c, 3.2, Stroke::new(W, col));
+    for i in 0..8 {
+        let (s, co) = (i as f32 * std::f32::consts::FRAC_PI_4).sin_cos();
+        seg(p, c, (co * 5.6, s * 5.6), (co * 7.6, s * 7.6), W, col);
+    }
+}
+
+pub fn icon_close(p: &Painter, c: Pos2, col: Color32) {
+    seg(p, c, (-4.5, -4.5), (4.5, 4.5), W, col);
+    seg(p, c, (-4.5, 4.5), (4.5, -4.5), W, col);
 }
 
 pub fn icon_app(p: &Painter, c: Pos2, col: Color32) {
-    p.rect_stroke(Rect::from_center_size(c, vec2(15.0, 15.0)), 4.0, Stroke::new(1.6, col), StrokeKind::Inside);
+    p.rect_stroke(Rect::from_center_size(c, vec2(15.0, 15.0)), 4.2, Stroke::new(W, col), StrokeKind::Inside);
     p.circle_filled(c, 2.0, col);
+}
+
+pub fn icon_battery(p: &Painter, c: Pos2, col: Color32) {
+    let body = Rect::from_center_size(c + vec2(-0.8, 0.0), vec2(15.0, 8.6));
+    p.rect_stroke(body, 2.6, Stroke::new(W, col), StrokeKind::Inside);
+    p.rect_filled(body.shrink(2.2), 1.0, col);
+    p.rect_filled(Rect::from_center_size(pos2(body.right() + 1.8, c.y), vec2(1.8, 3.6)), 0.9, col);
+}
+
+pub fn icon_mic(p: &Painter, c: Pos2, col: Color32) {
+    p.rect_filled(Rect::from_min_max(at(c, (-2.7, -8.5)), at(c, (2.7, 0.8))), 2.7, col);
+    arc(p, c, (0.0, -1.2), 5.3, 0.0, std::f32::consts::PI, col);
+    seg(p, c, (0.0, 4.1), (0.0, 7.4), W, col);
+    seg(p, c, (-2.7, 7.4), (2.7, 7.4), W, col);
+}
+
+pub fn icon_search(p: &Painter, c: Pos2, col: Color32) {
+    p.circle_stroke(c + vec2(-1.5, -1.5), 6.0, Stroke::new(1.8, col));
+    seg(p, c, (2.9, 2.9), (7.8, 7.8), 1.9, col);
+}
+
+pub fn icon_calc(p: &Painter, c: Pos2, col: Color32) {
+    p.rect_stroke(Rect::from_center_size(c, vec2(13.5, 16.0)), 3.0, Stroke::new(W, col), StrokeKind::Inside);
+    seg(p, c, (-3.6, -4.6), (3.6, -4.6), W, col);
+    for q in [(-3.0, 0.6), (3.0, 0.6), (-3.0, 4.6), (3.0, 4.6)] {
+        p.circle_filled(at(c, q), 1.1, col);
+    }
 }
 
 /// Equalizer bars, driven by time while playing.
 pub fn equalizer(p: &Painter, center: Pos2, bars: usize, playing: bool, time: f32, color: Color32, max_h: f32) {
     for i in 0..bars {
-        let h = if playing {
-            3.0 + (max_h - 3.0) * (0.5 + 0.5 * (time * (5.0 + i as f32 * 1.9) + i as f32 * 2.3).sin())
-        } else {
-            3.0
-        };
+        let h = if playing { 3.0 + (max_h - 3.0) * (0.5 + 0.5 * (time * (5.0 + i as f32 * 1.9) + i as f32 * 2.3).sin()) } else { 3.0 };
         let x = center.x + (i as f32 - (bars - 1) as f32 / 2.0) * 5.0;
         p.rect_filled(Rect::from_center_size(pos2(x, center.y), vec2(3.0, h)), 1.5, color);
     }
@@ -214,15 +338,15 @@ pub fn slider(ui: &mut Ui, id: egui::Id, rect: Rect, value: f32, f: f32) -> Opti
 
 /// iOS style switch. Returns true when clicked.
 pub fn toggle(ui: &mut Ui, id: egui::Id, c: Pos2, on: bool, f: f32) -> bool {
-    let rect = Rect::from_center_size(c, vec2(30.0, 18.0));
+    let rect = Rect::from_center_size(c, vec2(28.0, 16.0));
     let resp = ui.interact(rect.expand(3.0), id, Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     let k = ui.ctx().animate_bool_with_time(id.with("k"), on, 0.18);
     let bg = Color32::from_gray(62).lerp_to_gamma(GREEN, k);
-    let knob = pos2(rect.left() + 9.0 + 12.0 * k, rect.center().y);
+    let knob = pos2(rect.left() + 8.0 + 12.0 * k, rect.center().y);
     let p = ui.painter();
-    p.rect_filled(rect, 9.0, fade(bg, f));
-    p.circle_filled(knob + vec2(0.0, 0.8), 7.5, fade(Color32::from_black_alpha(80), f));
-    p.circle_filled(knob, 7.0, fade(Color32::WHITE, f));
+    p.rect_filled(rect, 8.0, fade(bg, f));
+    p.circle_filled(knob + vec2(0.0, 0.7), 6.7, fade(Color32::from_black_alpha(80), f));
+    p.circle_filled(knob, 6.2, fade(Color32::WHITE, f));
     resp.clicked()
 }
 
@@ -236,7 +360,7 @@ fn quad(a: Pos2, c: Pos2, b: Pos2, n: usize) -> Vec<Pos2> {
         .collect()
 }
 
-/// Atoll's `NotchShape`: quadratic top corners flaring outward into the screen edge (the "ears",
+/// A notch: quadratic top corners flaring outward into the screen edge (the "ears",
 /// drawn outside `body`'s left and right edges) and quadratic bottom corners.
 pub fn notch_shape(p: &Painter, body: Rect, ear: f32, bottom: f32) {
     let (l, r, t, b) = (body.left(), body.right(), body.top(), body.bottom());
@@ -248,11 +372,7 @@ pub fn notch_shape(p: &Painter, body: Rect, ear: f32, bottom: f32) {
     p.add(Shape::convex_polygon(pts, Color32::BLACK, Stroke::NONE));
 
     for left in [true, false] {
-        let curve = if left {
-            quad(pos2(l - ear, t), pos2(l, t), pos2(l, t + ear), 10)
-        } else {
-            quad(pos2(r, t + ear), pos2(r, t), pos2(r + ear, t), 10)
-        };
+        let curve = if left { quad(pos2(l - ear, t), pos2(l, t), pos2(l, t + ear), 10) } else { quad(pos2(r, t + ear), pos2(r, t), pos2(r + ear, t), 10) };
         let ox = if left { l + 1.0 } else { r - 1.0 };
         let mut m = Mesh::default();
         m.colored_vertex(pos2(ox, t), Color32::BLACK);
