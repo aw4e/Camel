@@ -1,15 +1,16 @@
 # Camel brand
 
-The mark is a small robot whose face is the notch: a dark screen with two pill eyes. It carries a single hump
-(the name) and two small round ears. The body is a rounded capsule, the shape of the bar itself.
+The mark is a small robot whose face is the notch: a dark screen with two pill eyes. The body is a wide capsule, the
+shape of the bar itself, 1.62 times as wide as it is tall. It carries one low, round hump (the name), a round ear at each
+end and two feet. Ears and feet are part of the mark: every version keeps them, at every size.
 
 ## Files
 
 | File | Use |
 |---|---|
 | `logo.svg` | Full-color symbol. Default for anything 48 px and larger. |
-| `logo-small.svg` | Simplified symbol (no ears or feet, wider hump, heavier eyes). Use below 48 px. |
-| `icon.svg`, `icon-{16…512}.png` | App icon: the small symbol on a dark rounded tile. |
+| `logo-small.svg` | Same drawing with a bigger face and heavier eyes, so it reads at small sizes. Ears and feet stay. Use below 48 px. |
+| `icon.svg`, `icon-{16…512}.png` | Icon: the small version, ears and feet included, on a transparent square. No tile and no background. |
 | `favicon.ico` | 16, 32 and 48 px. |
 | `symbol-{16,32,48}.png` | Transparent small symbol. The tray icon embeds `symbol-32.png`. |
 | `logo-horizontal.svg` / `-dark.svg` | Symbol plus the "Camel" wordmark, for light / dark backgrounds. |
@@ -49,7 +50,7 @@ Do not retype it in another face.
 ## Don't
 
 - Don't recolor the body, change the eye color, or add outlines, shadows or gradients.
-- Don't stretch, rotate or crop the symbol, or remove the ears or hump.
+- Don't stretch, rotate or crop the symbol, or remove the ears, feet or hump.
 - Don't place the full-color symbol on copper, orange or brown backgrounds.
 - Don't put copper text on white.
 
