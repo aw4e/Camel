@@ -102,8 +102,7 @@ impl Notch {
                     let label = if line == 1 && apps.len() > 2 { format!("+{} more", apps.len() - 1) } else { shorten(name, 9) };
                     let row = Rect::from_center_size(pos2(cx, y), vec2(w - 6.0, 10.0));
                     let lifted = self.mixer_drag.as_ref().is_some_and(|(k, _)| *k == key);
-                    let cursor = if self.mixer_drag.is_some() { egui::CursorIcon::Grabbing } else { egui::CursorIcon::Grab };
-                    let mut r = ui.interact(row, ui.scope_id().with(format!("app{i}-{line}")), Sense::drag()).on_hover_cursor(cursor);
+                    let mut r = ui.interact(row, ui.scope_id().with(format!("app{i}-{line}")), Sense::drag()).on_hover_cursor(egui::CursorIcon::PointingHand);
                     if self.mixer_drag.is_none() {
                         r = r.on_hover_text(format!("{name}. Drag it to another channel."));
                     }
@@ -155,6 +154,7 @@ impl Notch {
             self.mixer_drag = Some(drag);
         }
         if let Some((key, name)) = self.mixer_drag.clone() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand); // the hand all the way to the drop
             let pointer = ui.input(|i| i.pointer.latest_pos());
             // the strips are the channels; the master strip takes no apps
             let target = pointer.and_then(|pt| cards.iter().take(channels::NAMES.len()).position(|c| c.contains(pt)));
