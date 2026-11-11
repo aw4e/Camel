@@ -28,8 +28,9 @@ const NOISE: [&str; 17] = [
     "topic",
 ];
 
-/// How far a result's length may differ from the playing track and still count as the same recording.
-const DURATION_SLACK: f64 = 3.0;
+/// How far a result's length may differ from the playing track and still count as the same recording. Wide on purpose: a
+/// music video with an intro is longer than the audio the lyrics were timed for, and the lyrics view can shift them.
+const DURATION_SLACK: f64 = 20.0;
 
 fn words(s: &str) -> impl Iterator<Item = String> + '_ {
     s.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).map(str::to_lowercase)

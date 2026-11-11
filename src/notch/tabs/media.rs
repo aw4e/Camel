@@ -87,7 +87,18 @@ impl Notch {
     /// line, and a click on a line jumps there.
     fn draw_lyrics(&mut self, ui: &mut egui::Ui, o: egui::Pos2, (x0, x1): (f32, f32), m: &media::State, a: f32) {
         let Some(lines) = m.lyrics.as_deref() else { return };
-        let (pos, dur) = (m.position(), m.dur);
+        let (video, dur) = (m.position(), m.dur);
+        // music videos often start with an intro the audio-only lyrics do not have: the offset shifts the lyrics
+        let track = format!(
+            "{}
+{}",
+            m.artist, m.title
+        );
+        if self.lyric_track != track {
+            self.lyric_track = track;
+            self.lyric_offset = 0.0;
+        }
+        let pos = video - self.lyric_offset;
         const LINE_H: f32 = 24.0;
         let p = ui.painter().clone();
         let center = o.y + TOP + 44.0;
@@ -113,9 +124,14 @@ impl Notch {
             }
             let y = center + d * LINE_H;
             let hover_rect = Rect::from_min_size(pos2(x0 - 4.0, y - LINE_H / 2.0), vec2(x1 - x0 + 8.0, LINE_H)).intersect(region);
-            let resp = hit(ui, &format!("line{i}"), hover_rect);
+            let tip = if dur > 0.0 { "Click to jump here. Shift+click if the lyrics are early or late." } else { "Click the line you hear to sync." };
+            let resp = hit(ui, &format!("line{i}"), hover_rect).on_hover_text(tip);
             if resp.clicked() {
-                self.media.send(media::Cmd::Seek(*start));
+                if dur > 0.0 && ui.input(|i| i.modifiers.shift) {
+                    self.lyric_offset = video - *start;
+                } else {
+                    self.media.send(media::Cmd::Seek(*start + self.lyric_offset));
+                }
             }
             let shade = if resp.hovered() { 255 } else { (150.0 + 105.0 * near) as u8 };
             let alpha = (1.0 - 0.45 * d.abs()).clamp(0.0, 1.0) * a;
@@ -129,6 +145,15 @@ impl Notch {
             clip.galley(pos2(x0, y - galley.size().y / 2.0), galley, color);
         }
 
+        if self.lyric_offset != 0.0 {
+            let label = Rect::from_center_size(pos2(x1 + 26.0 - 40.0, o.y + TOP + 86.0), vec2(80.0, 12.0));
+            let reset = hit(ui, "lyric-offset", label).on_hover_text("Click to remove the shift");
+            let col = if reset.hovered() { Color32::WHITE } else { DIM };
+            p.text(label.right_center(), Align2::RIGHT_CENTER, format!("shifted {:+.1} s", -self.lyric_offset), font(9.5), fade(col, a));
+            if reset.clicked() {
+                self.lyric_offset = 0.0;
+            }
+        }
         if dur <= 0.0 {
             // no timeline from the player: the position is counted here, and a click on a line corrects it
             p.text(pos2(x0, o.y + TOP + 96.0), Align2::LEFT_CENTER, "No timeline from this player. Click the line you hear to sync.", font(9.5), fade(DIM, a));
@@ -136,7 +161,7 @@ impl Notch {
         }
         let bar = Rect::from_x_y_ranges(x0..=x1 + 26.0, o.y + TOP + 95.0..=o.y + TOP + 97.0);
         p.rect_filled(bar, 1.0, fade(fill(24), a));
-        let done = (pos / dur).clamp(0.0, 1.0) as f32;
+        let done = (video / dur).clamp(0.0, 1.0) as f32;
         p.rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * done, bar.height())), 1.0, fade(Color32::from_gray(235), a));
     }
 }

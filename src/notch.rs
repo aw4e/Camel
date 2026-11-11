@@ -194,6 +194,9 @@ pub(crate) struct Notch {
     lyrics_view: bool,
     /// Fractional index of the lyric line the view is scrolled to.
     lyric_pos: f32,
+    /// Seconds the lyrics are ahead of the player for the current track, and which track that is.
+    lyric_offset: f64,
+    lyric_track: String,
     updater: update::Updater,
     launched: Instant,
     update_at: Option<Instant>,
@@ -271,6 +274,8 @@ impl Notch {
             tab_scroll: 0.0,
             lyrics_view: false,
             lyric_pos: 0.0,
+            lyric_offset: 0.0,
+            lyric_track: String::new(),
             updater: update::Updater::new(),
             launched: Instant::now(),
             update_at: None,
