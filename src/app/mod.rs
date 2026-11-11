@@ -9,7 +9,7 @@ pub(crate) mod widgets;
 use crate::platform::{self, HOTKEY_PRESSED, Tray};
 use crate::prelude::*;
 use crate::settings::{self, Settings};
-use crate::{actions, apps, channels, clipboard, focus, media, mixer, monitor, notes, radios, reminders, spotlight, system, update, weather};
+use crate::{actions, apps, channels, clipboard, focus, media, mixer, monitor, notes, radios, reminders, router, spotlight, system, update, weather};
 use chrono::Local;
 use global_hotkey::GlobalHotKeyManager;
 use global_hotkey::hotkey::HotKey;
@@ -257,6 +257,10 @@ pub(crate) struct Notch {
     lyric_offset: f64,
     lyric_track: String,
     updater: update::Updater,
+    /// Plays the apps' sound through another output while `settings.route_to` names one.
+    pub(crate) router: Option<router::Router>,
+    /// The outputs to choose from for `router`, read every few seconds.
+    pub(crate) route_devices: Vec<(String, String)>,
     weather: weather::Service,
     /// Wi-Fi and Bluetooth, and the mute state of the microphone and speakers as the controls page last read them.
     radios: radios::Radios,
@@ -358,6 +362,8 @@ impl Notch {
             lyric_offset: 0.0,
             lyric_track: String::new(),
             updater: update::Updater::new(),
+            router: None,
+            route_devices: Vec::new(),
             weather,
             radios: radios::Radios::spawn(),
             controls_at: Instant::now() - Duration::from_secs(5),
@@ -551,6 +557,10 @@ impl Notch {
             self.settings.autostart = before.autostart;
             self.show_toast(ToastIcon::Apps, "Could not change autostart", "Run Camel as administrator".to_owned());
         }
+        if self.settings.route_to != before.route_to {
+            self.router = None; // stops the old one before the new one opens its output
+            self.poll_router();
+        }
         let s = &self.settings;
         if s.always_on_top != before.always_on_top {
             ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(if s.always_on_top { egui::WindowLevel::AlwaysOnTop } else { egui::WindowLevel::Normal }));
@@ -695,12 +705,26 @@ impl Notch {
             self.sys_at = Instant::now();
             self.h24 = system::use_24h();
             self.reduce_motion = system::reduced_motion();
+            self.poll_router();
             if self.settings.device_toasts {
                 self.poll_devices();
             }
         }
         if self.settings.key_toasts {
             self.poll_keys();
+        }
+    }
+
+    /// Keeps the router running while an output is chosen: starts it, and starts it again when it failed because the
+    /// output was gone (headphones unplugged) and is back.
+    fn poll_router(&mut self) {
+        self.route_devices = system::render_devices();
+        let id = self.settings.route_to.clone();
+        if id.is_empty() {
+            self.router = None;
+        } else if self.router.as_ref().is_none_or(|r| matches!(r.status(), router::Status::Failed(_))) && self.route_devices.iter().any(|(d, _)| *d == id) {
+            self.router = None;
+            self.router = Some(router::Router::start(&id));
         }
     }
 

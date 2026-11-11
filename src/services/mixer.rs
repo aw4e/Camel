@@ -12,6 +12,8 @@ use windows::core::Interface;
 
 pub struct AppVolume {
     pub name: String,
+    /// The process that plays it; 0 for system sounds.
+    pub pid: u32,
     pub level: f32,
     pub muted: bool,
     /// How loud the app is right now, 0..1; updated by `read_peaks`.
@@ -60,10 +62,12 @@ impl Mixer {
                 }
                 let ctl2: IAudioSessionControl2 = session.cast()?;
                 // returns S_OK (0) for system sounds, S_FALSE (1) for others; both count as is_ok()
-                let name = if ctl2.IsSystemSoundsSession().0 == 0 { "System sounds".to_owned() } else { self.process_name(ctl2.GetProcessId()?) };
+                let system = ctl2.IsSystemSoundsSession().0 == 0;
+                let pid = if system { 0 } else { ctl2.GetProcessId()? };
+                let name = if system { "System sounds".to_owned() } else { self.process_name(pid) };
                 let ctl: ISimpleAudioVolume = session.cast()?;
                 let (level, muted) = (ctl.GetMasterVolume()?, ctl.GetMute()?.as_bool());
-                apps.push(AppVolume { name, level, muted, peak: 0.0, ctl, meter: session.cast().ok() });
+                apps.push(AppVolume { name, pid, level, muted, peak: 0.0, ctl, meter: session.cast().ok() });
             }
             self.apps = apps;
         }

@@ -1,6 +1,5 @@
 //! Captures the sound of one app (and its child processes) with the documented Windows "process loopback" API, no driver
-//! needed. This is the first block of a driverless mixer: capture each channel's apps, mix them, play the mix elsewhere.
-//! Format of what comes out: interleaved stereo f32 at 48 kHz.
+//! needed. The router mixes these captures and plays them on another output. Format of what comes out: interleaved stereo f32 at 48 kHz.
 
 use std::mem::ManuallyDrop;
 use std::sync::{Arc, Condvar, Mutex};
@@ -132,6 +131,7 @@ impl Drop for ProcessCapture {
 }
 
 /// Root mean square of interleaved samples, 0 for silence.
+#[cfg(test)]
 pub fn rms(samples: &[f32]) -> f32 {
     if samples.is_empty() {
         return 0.0;

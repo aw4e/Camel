@@ -7,7 +7,7 @@ mod services;
 // The modules live in folders; these names keep `crate::media`, `crate::ui` and so on short for every file.
 use app::{icons as ui, layout, prelude, widgets};
 use features::{actions, apps, channels, clipboard, currency, focus, notes, reminders, settings, spotlight, worldtime};
-use services::{lyrics, media, mixer, monitor, platform, radios, rates, system, update, weather};
+use services::{loopback, lyrics, media, mixer, monitor, platform, radios, rates, router, system, update, weather};
 
 use app::Notch;
 use eframe::egui::{self, vec2};

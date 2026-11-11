@@ -140,7 +140,15 @@ list of helpers is hidden. An app with many audio sessions, such as a browser wi
 follows the default output: when it changes, the mixer is made again for the new one. Drag an app's name under a strip onto
 another strip to move it; Camel remembers the choice by app name. A channel's fader sets the volume of every app in it, and
 its mute button mutes them all. It uses the same per-app volume Windows' own volume mixer uses, so levels you set stay when
-Camel closes. It does not create virtual audio devices (that needs a driver), so there is no separate stream mix.
+Camel closes. It does not create virtual audio devices, because that needs a driver.
+
+**Mix to (experimental).** Settings, Media and data, *Mix to* plays the sound of every app through an output of your choice
+without any driver. Camel captures each playing app with the Windows process loopback API, mixes the captures and plays the mix
+on the chosen output. For this, make an output nobody listens to (an unplugged second jack, say) the Windows default, and pick
+your headphones in *Mix to*; the apps play to the default, and Camel plays the same sound on your headphones. The Mixer's
+faders keep working because they set the volume of the apps themselves. It adds about 30 ms of delay and mixes everything in one
+stream, so there is no per-channel processing yet. A green dot means it is running, orange that the chosen output is also the
+default (nothing is routed), red that it could not open the output. Needs Windows 10 build 20348 or newer.
 
 **Weather.** The location comes from Windows (Settings, Privacy, Location, which must allow desktop apps) and is rounded
 to two decimals before it is sent. If Windows gives none, the weather card says "No location"; type `city` and a name in
@@ -289,6 +297,7 @@ src/services/                what talks to Windows or the network
     system.rs  radios.rs     clock format, keyboard, network, audio output; Wi-Fi and Bluetooth
     weather.rs  update.rs    Open-Meteo weather, release check with a verified download
     rates.rs                 exchange rates from the European Central Bank
+    loopback.rs router.rs    per-app capture and the Mix to router
     platform.rs              tray, hotkey, fonts, window frame, elevation
 src/features/                logic that needs no window
     actions.rs  spotlight.rs Spotlight actions and search, calculator, unit conversion

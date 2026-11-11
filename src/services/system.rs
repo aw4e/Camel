@@ -4,7 +4,7 @@ use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Globalization::{
     GetLocaleInfoEx, GetLocaleInfoW, LOCALE_ITIME, LOCALE_SDECIMAL, LOCALE_SINTLSYMBOL, LOCALE_SISO639LANGNAME, LOCALE_STHOUSAND,
 };
-use windows::Win32::Media::Audio::{IMMDeviceEnumerator, MMDeviceEnumerator, eConsole, eRender};
+use windows::Win32::Media::Audio::{DEVICE_STATE_ACTIVE, IMMDeviceEnumerator, MMDeviceEnumerator, eConsole, eRender};
 use windows::Win32::Networking::NetworkListManager::{INetworkListManager, NetworkListManager};
 use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance, STGM_READ};
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, GetKeyboardLayout, VK_CAPITAL};
@@ -83,6 +83,30 @@ pub fn audio_output() -> Option<(String, String)> {
     }
 }
 
+/// Id and friendly name of every active output, speakers and headphones alike.
+pub fn render_devices() -> Vec<(String, String)> {
+    let list = || -> windows::core::Result<Vec<(String, String)>> {
+        unsafe {
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+            let devices = enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE)?;
+            let mut out = Vec::new();
+            for i in 0..devices.GetCount()? {
+                let device = devices.Item(i)?;
+                let id = device.GetId()?.to_string()?;
+                let name = device
+                    .OpenPropertyStore(STGM_READ)
+                    .ok()
+                    .and_then(|s| s.GetValue(&PKEY_Device_FriendlyName).ok())
+                    .map(|v| v.to_string())
+                    .unwrap_or_default();
+                out.push((id, name));
+            }
+            Ok(out)
+        }
+    };
+    list().unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -95,5 +119,6 @@ mod tests {
         let _ = super::caps_lock();
         assert!(super::keyboard_language().is_none_or(|l| l.len() == 2));
         assert!(super::audio_output().is_none_or(|(id, _)| !id.is_empty()));
+        assert!(super::render_devices().iter().all(|(id, _)| !id.is_empty()));
     }
 }

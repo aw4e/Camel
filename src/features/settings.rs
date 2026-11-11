@@ -27,6 +27,8 @@ pub struct Settings {
     pub city: String,
     /// Apps the user moved to another mixer channel, by lowercase app name.
     pub channel_overrides: std::collections::HashMap<String, usize>,
+    /// Id of the output the sound of all apps is played through instead of the default one; empty is off.
+    pub route_to: String,
     /// Seconds the user shifted the lyrics of a track by (Shift+click on a line), by lowercase "artist\ntitle".
     pub lyric_offsets: std::collections::HashMap<String, f64>,
     /// Which version of the defaults this file was written for; a file without one is older than any version.
@@ -56,6 +58,7 @@ impl Default for Settings {
             weather: true,
             city: String::new(),
             channel_overrides: Default::default(),
+            route_to: String::new(),
             lyric_offsets: Default::default(),
             version: VERSION,
         }
