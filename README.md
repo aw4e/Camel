@@ -77,7 +77,7 @@ Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by defau
 
 | Feature | What it does |
 |---|---|
-| **Now playing** | Title, artist, album art, seek bar and transport controls for any app that uses Windows media controls (Spotify, browsers, players), with synced lyrics from [lrclib.net](https://lrclib.net). |
+| **Now playing** | Title, artist, album art, seek bar and transport controls for any app that uses Windows media controls (Spotify, browsers, players), with synced lyrics from [lrclib.net](https://lrclib.net) in a scrolling, Spotify-style view. |
 | **Shelf** | Drag files onto the notch to park them, click to open, right-click to remove. |
 | **Clipboard history** | The last eight things you copied, text and pictures. Click to copy again, right-click to remove, hover to pin. Kept in memory only. |
 | **Clock** | Time, date and the whole month, with today marked. The notch grows by 14 px in months that need six rows. |
@@ -94,7 +94,9 @@ Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by defau
 
 ### Details
 
-**Lyrics.** Names that YouTube reports (`Artist - Song (Official Video)`, `Artist - Topic`, `ArtistVEVO`) are cleaned and
+**Lyrics.** When lyrics are found, a lyrics button appears at the right of the media page. It swaps the player for a
+scrolling view: the current line is large and white, the lines around it fade out, and clicking a line jumps there. Names
+that YouTube reports (`Artist - Song (Official Video)`, `Artist - Topic`, `ArtistVEVO`) are cleaned and
 searched several ways, and a result is only used when its title and length match. Players that report no timeline (some
 browser tabs) show no lyrics, because there is no position to follow.
 
@@ -271,8 +273,8 @@ The Settings screen is the densest, so its two groups are the one place where ro
   listed.
 - Spotlight indexes up to 60,000 files, and the index lives in memory only.
 - Mic and camera dots read the Windows privacy consent store, so they follow what Windows itself reports.
-- Lyrics can be out of sync for some players, and some browser tabs report no timeline at all. See the open
-  [issues](https://github.com/aw4e/Camel/issues).
+- Lyrics depend on the position the player reports, which some players report late, and some browser tabs report none at
+  all. Lyrics that are out of sync are tracked in [#2](https://github.com/aw4e/Camel/issues/2).
 
 ## Contributing
 

@@ -29,7 +29,7 @@ const NOISE: [&str; 17] = [
 ];
 
 /// How far a result's length may differ from the playing track and still count as the same recording.
-const DURATION_SLACK: f64 = 6.0;
+const DURATION_SLACK: f64 = 3.0;
 
 fn words(s: &str) -> impl Iterator<Item = String> + '_ {
     s.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).map(str::to_lowercase)

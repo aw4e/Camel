@@ -261,6 +261,12 @@ pub fn icon_mic(p: &Painter, c: Pos2, col: Color32) {
     seg(p, c, (-2.7, 7.4), (2.7, 7.4), W, col);
 }
 
+pub fn icon_lyrics(p: &Painter, c: Pos2, col: Color32) {
+    path(p, c, &[(-7.5, -6.5), (7.5, -6.5), (7.5, 4.5), (-2.0, 4.5), (-5.5, 8.0), (-5.5, 4.5), (-7.5, 4.5)], 2.5, true, W, col);
+    seg(p, c, (-3.8, -2.6), (3.8, -2.6), W, col);
+    seg(p, c, (-3.8, 0.6), (1.0, 0.6), W, col);
+}
+
 pub fn icon_search(p: &Painter, c: Pos2, col: Color32) {
     p.circle_stroke(c + vec2(-1.5, -1.5), 6.0, Stroke::new(1.8, col));
     seg(p, c, (2.9, 2.9), (7.8, 7.8), 1.9, col);

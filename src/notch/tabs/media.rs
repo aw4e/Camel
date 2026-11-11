@@ -28,18 +28,36 @@ impl Notch {
 
         let x0 = o.x + MARGIN + 72.0 + GAP_L;
         let x1 = o.x + OPEN_W - MARGIN;
+        let pos = m.position();
+        let has_lyrics = self.settings.lyrics && m.lyrics.is_some();
+        if has_lyrics {
+            let button = Rect::from_center_size(pos2(x1 - 11.0, o.y + TOP + 9.0), Vec2::splat(22.0));
+            let resp = hit(ui, "lyrics-toggle", button).on_hover_text(if self.lyrics_view { "Show the player" } else { "Show lyrics" });
+            if resp.hovered() {
+                p.circle_filled(button.center(), 11.0, fade(fill(26), a));
+            }
+            ui::icon_lyrics(&p, button.center(), fade(if self.lyrics_view { accent } else { Color32::WHITE }, a));
+            if resp.clicked() {
+                self.lyrics_view = !self.lyrics_view;
+            }
+        }
+        if has_lyrics && self.lyrics_view {
+            self.draw_lyrics(ui, o, (x0, x1 - 26.0), m, a);
+            return;
+        }
         let (title, artist) = if m.title.is_empty() { ("Not playing", "") } else { (m.title.as_str(), m.artist.as_str()) };
-        ui::marquee(&p, pos2(x0, o.y + TOP), x1 - x0, title, bold(14.0), fade(Color32::WHITE, a), time);
-        ui::marquee(&p, pos2(x0, o.y + TOP + 20.0), x1 - x0, artist, font(12.0), fade(GRAY, a), time);
+        let text_w = x1 - x0 - if has_lyrics { 26.0 } else { 0.0 };
+        ui::marquee(&p, pos2(x0, o.y + TOP), text_w, title, bold(14.0), fade(Color32::WHITE, a), time);
+        ui::marquee(&p, pos2(x0, o.y + TOP + 20.0), text_w, artist, font(12.0), fade(GRAY, a), time);
 
         if m.dur > 0.0 {
             let cy = o.y + TOP + 50.0;
             let bar = Rect::from_x_y_ranges(x0 + 36.0..=x1 - 40.0, cy - 6.0..=cy + 6.0);
-            if let Some(f) = seek_bar(ui, bar, m.pos / m.dur, a) {
+            if let Some(f) = seek_bar(ui, bar, pos / m.dur, a) {
                 self.media.send(media::Cmd::Seek(f * m.dur));
             }
-            p.text(pos2(x0, cy), Align2::LEFT_CENTER, fmt_time(m.pos), font(11.0), fade(GRAY, a));
-            p.text(pos2(x1, cy), Align2::RIGHT_CENTER, format!("-{}", fmt_time((m.dur - m.pos).max(0.0))), font(11.0), fade(GRAY, a));
+            p.text(pos2(x0, cy), Align2::LEFT_CENTER, fmt_time(pos), font(11.0), fade(GRAY, a));
+            p.text(pos2(x1, cy), Align2::RIGHT_CENTER, format!("-{}", fmt_time((m.dur - pos).max(0.0))), font(11.0), fade(GRAY, a));
         }
 
         let cy = o.y + TOP + 75.0;
@@ -63,13 +81,57 @@ impl Notch {
         if control(ui, "next", 38.0, 28.0, ui::icon_next) {
             self.media.send(media::Cmd::Next);
         }
+    }
 
-        if let Some(l) = &m.lyrics {
-            let idx = l.partition_point(|(t, _)| *t <= m.pos + 0.25);
-            let text = idx.checked_sub(1).map(|i| l[i].1.as_str()).filter(|s| !s.is_empty()).unwrap_or("♪");
-            let w = OPEN_W - 100.0;
-            let tw = p.layout_no_wrap(text.to_owned(), bold(13.0), Color32::WHITE).size().x.min(w);
-            ui::marquee(&p, pos2(o.x + (OPEN_W - tw) / 2.0, o.y + TOP + 105.0), w, text, bold(12.0), fade(Color32::WHITE, a), time);
+    /// Spotify-style lyrics: the current line is large and white, its neighbours fade out, the list glides from line to
+    /// line, and a click on a line jumps there.
+    fn draw_lyrics(&mut self, ui: &mut egui::Ui, o: egui::Pos2, (x0, x1): (f32, f32), m: &media::State, a: f32) {
+        let Some(lines) = m.lyrics.as_deref() else { return };
+        let (pos, dur) = (m.position(), m.dur);
+        const LINE_H: f32 = 24.0;
+        let p = ui.painter().clone();
+        let center = o.y + TOP + 44.0;
+        let region = Rect::from_x_y_ranges(x0 - 4.0..=x1 + 4.0, o.y + TOP - 4.0..=o.y + TOP + 92.0);
+        let clip = p.with_clip_rect(region);
+
+        let current = lines.partition_point(|(t, _)| *t <= pos + 0.25) as f32 - 1.0;
+        let dt = ui.input(|i| i.stable_dt).min(0.1);
+        self.lyric_pos =
+            if (current - self.lyric_pos).abs() > 6.0 { current } else { self.lyric_pos + (current - self.lyric_pos) * (1.0 - (-dt * 10.0).exp()) };
+        if (current - self.lyric_pos).abs() > 0.01 {
+            ui.ctx().request_repaint();
         }
+
+        let first = (self.lyric_pos - 3.0).floor().max(0.0) as usize;
+        let last = ((self.lyric_pos + 3.0).ceil().max(0.0) as usize).min(lines.len().saturating_sub(1));
+        for (i, (start, text)) in lines.iter().enumerate().take(last + 1).skip(first) {
+            let d = i as f32 - self.lyric_pos;
+            let near = (1.0 - d.abs()).clamp(0.0, 1.0);
+            let text = if text.is_empty() && near > 0.5 { "♪" } else { text.as_str() };
+            if text.is_empty() {
+                continue;
+            }
+            let y = center + d * LINE_H;
+            let hover_rect = Rect::from_min_size(pos2(x0 - 4.0, y - LINE_H / 2.0), vec2(x1 - x0 + 8.0, LINE_H)).intersect(region);
+            let resp = hit(ui, &format!("line{i}"), hover_rect);
+            if resp.clicked() {
+                self.media.send(media::Cmd::Seek(*start));
+            }
+            let shade = if resp.hovered() { 255 } else { (150.0 + 105.0 * near) as u8 };
+            let alpha = (1.0 - 0.45 * d.abs()).clamp(0.0, 1.0) * a;
+            let color = fade(Color32::from_gray(shade), alpha);
+            let mut size = 12.5 + 3.0 * near;
+            let mut galley = p.layout_no_wrap(text.to_owned(), bold(size), color);
+            if galley.size().x > x1 - x0 {
+                size = (size * (x1 - x0) / galley.size().x).max(size * 0.75);
+                galley = p.layout_no_wrap(text.to_owned(), bold(size), color);
+            }
+            clip.galley(pos2(x0, y - galley.size().y / 2.0), galley, color);
+        }
+
+        let bar = Rect::from_x_y_ranges(x0..=x1 + 26.0, o.y + TOP + 95.0..=o.y + TOP + 97.0);
+        p.rect_filled(bar, 1.0, fade(fill(24), a));
+        let done = if dur > 0.0 { (pos / dur).clamp(0.0, 1.0) as f32 } else { 0.0 };
+        p.rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * done, bar.height())), 1.0, fade(Color32::from_gray(235), a));
     }
 }

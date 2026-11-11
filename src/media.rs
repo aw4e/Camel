@@ -3,7 +3,7 @@
 use crate::lyrics::{self, Lyrics};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use windows::Media::Control::{GlobalSystemMediaTransportControlsSessionManager as Manager, GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status};
 use windows::Storage::Streams::DataReader;
 use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize};
@@ -22,7 +22,19 @@ pub struct State {
     /// seconds; dur == 0 means the player reports no timeline
     pub pos: f64,
     pub dur: f64,
+    /// When `pos` was read; the worker only polls twice a second.
+    pub at: Option<Instant>,
     pub lyrics: Option<Arc<Lyrics>>,
+}
+
+impl State {
+    /// Where the track is now: the last reading plus the time since, while it plays.
+    pub fn position(&self) -> f64 {
+        match (self.playing, self.at) {
+            (true, Some(at)) => (self.pos + at.elapsed().as_secs_f64()).min(self.dur),
+            _ => self.pos,
+        }
+    }
 }
 
 pub struct LyricsCtx {
@@ -113,7 +125,7 @@ fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &
     let (pos, dur) = timeline(&session, playing).unwrap_or((0.0, 0.0));
     // without a timeline there is no position to follow, so the lines would never advance
     let lyrics = lyrics_for(lyr, &artist, &title, dur).filter(|_| dur > 0.0);
-    *shared.lock().unwrap_or_else(PoisonError::into_inner) = State { title, artist, playing, art, pos, dur, lyrics };
+    *shared.lock().unwrap_or_else(PoisonError::into_inner) = State { title, artist, playing, art, pos, dur, at: Some(Instant::now()), lyrics };
     Ok(())
 }
 
@@ -176,4 +188,22 @@ fn lyrics_for(lyr: &Arc<LyricsCtx>, artist: &str, title: &str, dur: f64) -> Opti
         }
     }
     lyr.slot.lock().unwrap_or_else(PoisonError::into_inner).as_ref().filter(|(k, _)| *k == key).map(|(_, v)| v.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn position_keeps_moving_only_while_playing_and_stops_at_the_end() {
+        let mut s = State { pos: 10.0, dur: 100.0, at: Some(Instant::now()), ..State::default() };
+        assert_eq!(s.position(), 10.0, "paused: the last reading");
+        s.playing = true;
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(s.position() > 10.0 && s.position() < 11.0);
+        s.pos = 99.99;
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(s.position(), 100.0, "never past the end");
+        assert_eq!(State { playing: true, pos: 5.0, ..State::default() }.position(), 5.0, "no reading yet");
+    }
 }

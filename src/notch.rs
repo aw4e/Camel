@@ -190,6 +190,10 @@ pub(crate) struct Notch {
     last_frame: Instant,
     swipe: f32,
     tab_scroll: f32,
+    /// Media page shows the scrolling lyrics instead of the player controls.
+    lyrics_view: bool,
+    /// Fractional index of the lyric line the view is scrolled to.
+    lyric_pos: f32,
     updater: update::Updater,
     launched: Instant,
     update_at: Option<Instant>,
@@ -265,6 +269,8 @@ impl Notch {
             last_frame: Instant::now(),
             swipe: 0.0,
             tab_scroll: 0.0,
+            lyrics_view: false,
+            lyric_pos: 0.0,
             updater: update::Updater::new(),
             launched: Instant::now(),
             update_at: None,
@@ -602,15 +608,12 @@ impl Notch {
     /// Springs the body towards its size for `mode` and keeps the OS window just big enough around it.
     /// Resizing the window every frame tears, so it only changes when a transition starts (grow to the destination
     /// at once) or ends (shrink after the shape settled). Returns the target size and whether the shape still moves.
-    fn fit_window(&mut self, ctx: &egui::Context, mode: Mode, dt: f32, has_lyrics: bool) -> (Vec2, bool) {
-        let lyric_line = self.settings.lyrics && self.tab == Tab::Media && has_lyrics;
+    fn fit_window(&mut self, ctx: &egui::Context, mode: Mode, dt: f32) -> (Vec2, bool) {
         let target = match mode {
             Mode::Spot => vec2(SPOT_W, 52.0 + if self.spot.hits.is_empty() { 0.0 } else { 8.0 + 40.0 * self.spot.hits.len() as f32 }),
             Mode::Open => vec2(
                 OPEN_W,
-                if lyric_line {
-                    OPEN_H + 24.0
-                } else if self.tab == Tab::Settings {
+                if self.tab == Tab::Settings {
                     SETTINGS_H
                 } else if self.tab == Tab::Clock && month_rows(Local::now().date_naive()) > 5 {
                     OPEN_H + 14.0
@@ -781,7 +784,7 @@ impl eframe::App for Notch {
             self.spot.open = false;
         }
 
-        let (target, shape_moving) = self.fit_window(&ctx, mode, dt, m.lyrics.is_some());
+        let (target, shape_moving) = self.fit_window(&ctx, mode, dt);
 
         if self.tab != self.prev_tab {
             self.prev_tab = self.tab;
