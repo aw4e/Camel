@@ -71,6 +71,8 @@ Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by defau
 | Clipboard history | Records what you copy. Off means Camel never reads the clipboard. |
 | Privacy indicators | Shows dots while a microphone or camera is in use. |
 | Volume HUD | Shows a bar when the master volume or mute changes. |
+| Caps Lock and language | Shows a notice when Caps Lock or the keyboard language changes. |
+| Network and audio alerts | Shows a notice when the internet drops or returns and when the default audio output changes (headphones, Bluetooth speakers). |
 | Spotlight (Alt+Space) | Enables the launcher and its hotkey. |
 
 ## Features
@@ -80,8 +82,8 @@ Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by defau
 | **Now playing** | Title, artist, album art, seek bar and transport controls for any app that uses Windows media controls (Spotify, browsers, players), with synced lyrics from [lrclib.net](https://lrclib.net) in a scrolling, Spotify-style view. |
 | **Shelf** | Drag files onto the notch to park them, click to open, right-click to remove. |
 | **Clipboard history** | The last eight things you copied, text and pictures. Click to copy again, right-click to remove, hover to pin. Kept in memory only. |
-| **Clock** | Time, date and the whole month, with today marked. The notch grows by 14 px in months that need six rows. |
-| **Focus timer** | A countdown with a progress ring and a length you set yourself, from 1 second to 3 hours. The time left shows in the closed pill. |
+| **Clock** | Time, date and the whole month, with today marked. It follows the Windows 12 or 24-hour setting. The notch grows by 14 px in months that need six rows. |
+| **Focus timer** | A countdown with a progress ring and a length you set yourself, from 1 second to 3 hours. The time left shows in the closed pill, with a ring beside it. Optional rounds run focus and breaks on their own. |
 | **Mixer** | Master volume plus a slider for each app that is playing audio. |
 | **Spotlight** | A launcher for apps, files, a calculator, unit conversion, system actions and the web. See [Spotlight commands](#spotlight-commands). |
 | **Volume HUD** | A bar with the level shows in the notch when the master volume or mute changes. It stays quiet while the Mixer page is open. |
@@ -90,7 +92,10 @@ Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by defau
 | **Privacy dots** | Green and orange dots while a microphone or camera is in use. |
 | **Apps** | Installed programs with a search box: uninstall them, clean up leftovers, and switch startup items on or off. |
 | **Updates** | Checks GitHub for a newer release and installs it when you ask. |
-| **Tray icon** | Keep awake, Settings and Quit. |
+| **Reminders** | `remind 15m stretch`, `remind every 45m drink water` or `todo buy milk` in Spotlight. A toast and a beep when one is due. |
+| **Alerts** | Notices for Caps Lock, keyboard language, losing or regaining internet and a new audio output. |
+| **Minimal notch** | A tray option that shrinks the closed notch to a thin line, for screens with thick top bezels. |
+| **Tray icon** | Keep awake, Minimal notch, Settings and Quit. |
 
 ### Details
 
@@ -105,9 +110,23 @@ browsers) gets an estimated position, counted from the start of the track: click
 A picture shows a thumbnail, its size and how much memory it takes. Pictures are kept as compressed PNG, 24 MB at most in
 total, and the oldest go first. Nothing is saved to disk, and anything a password manager marks as sensitive is skipped.
 
+**Reminders.** Type `remind` or `todo` in Spotlight, then an optional time and the text: `remind 15m stretch`,
+`remind 17:30 call mom` (or `5pm`), `remind every 45m drink water` (repeats, at most once a minute) or just `todo buy milk`
+for an item without a time. When one is due it shows as a toast for ten seconds with a beep, and `snooze` asks again in ten
+minutes. Type `todo` to list what is pending; Enter on a row ticks it off. They are saved in `%APPDATA%\Camel\reminders.json`,
+so they survive a restart. A time like `10:30` means the clock; write `10m30s` for a duration.
+
 **Focus timer.** Click the time and type `30` or `25:30`, use the − and + buttons (5 minutes, or 1 with Shift), scroll over
 the timer (1 minute per notch), or pick 15, 25 or 45. It is locked while it runs, and you get a beep and a notice when the
-session ends.
+session ends. The **Rounds** chip next to the time turns on focus and break rounds: when a focus session ends a 5 minute
+break starts by itself, then focus again, and after the fourth focus session a 15 minute break. The ring turns green during
+breaks and the label shows where you are in the cycle.
+
+**Now playing.** When several players are open, hover the album art to see which one is shown and click it to switch.
+
+**Alerts.** The Caps Lock and language notice is checked every quarter second. The language is the keyboard layout of the
+window you are typing in, so switching to an app with another layout shows it too. The connection and audio output checks
+run every five seconds. Each group has its own switch in Settings.
 
 **Apps.** Programs are read from the registry. Hover a row to uninstall it (its own uninstaller runs, with the usual admin
 prompt) or open its install folder. When the uninstaller finishes, Camel looks for leftover folders and offers to move them
@@ -133,6 +152,9 @@ web with DuckDuckGo.
 | `restart`, `shutdown`, `sign out` | Restarts, shuts down or signs out, after a second Enter. |
 | `awake`, `caffeine` | Turns keep awake on or off. |
 | `timer 10m`, `focus 1h30m`, `timer 25` | Starts the focus timer at that length. Accepts `10m`, `90s`, `1h30m`, `25`, `25:30`. |
+| `remind 15m stretch`, `remind every 45m drink water`, `todo buy milk` | Adds a reminder or a to-do. `todo` lists them and Enter ticks one off, `snooze` repeats the last one in 10 minutes. |
+| `time tokyo`, `time in new york` | The time in another city, with the gap from here. About 40 cities; daylight saving comes from Windows. Enter copies it. |
+| `until 25 dec`, `days until 2026-12-25` | The days left to a date. Enter copies it. |
 | `update`, `version` | Checks for a newer version, or installs the one that was found. |
 | `mute`, `mic` | Mutes or unmutes the speakers (the volume HUD shows it) or the default microphone. |
 | `note buy milk` | Saves a dated line to `%APPDATA%\Camel\notes.txt`. `notes` opens that file. |
@@ -239,6 +261,9 @@ src/actions.rs               Spotlight actions: power, timers, quitting programs
 src/clipboard.rs             clipboard history and pins
 src/notes.rs                 quick notes
 src/update.rs                release check, verified download, in-place swap
+src/reminders.rs             reminders and to-dos, parsing and storage
+src/worldtime.rs            time in other cities and days to a date
+src/system.rs               Windows queries: clock format, animation setting, keyboard, network, audio output
 src/focus.rs                 focus timer
 ```
 

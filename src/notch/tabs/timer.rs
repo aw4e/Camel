@@ -45,6 +45,38 @@ impl Notch {
             }
         }
 
+        // rounds: focus and breaks follow each other by themselves, four focus sessions and then a long break
+        let major = phi_columns().0;
+        let chip = Rect::from_min_size(pos2(o.x + MARGIN + major - 58.0, o.y + TOP + 4.0), vec2(58.0, 20.0));
+        let on = self.focus.rounds();
+        let resp = hit(ui, "rounds", chip).on_hover_text(if on { "Rounds are on: focus, break, repeat" } else { "Turn on focus and break rounds" });
+        p.rect_filled(
+            chip,
+            10.0,
+            fade(
+                if on {
+                    fill(36)
+                } else if resp.hovered() {
+                    fill(20)
+                } else {
+                    fill(14)
+                },
+                a,
+            ),
+        );
+        p.text(chip.center(), Align2::CENTER_CENTER, "Rounds", bold(11.0), fade(if on { Color32::WHITE } else { GRAY }, a));
+        if resp.clicked() && !running {
+            self.focus.set_rounds(!on);
+        }
+        if on {
+            let label = match self.focus.phase() {
+                focus::Phase::Focus => format!("Focus {} of {}", self.focus.done() + 1, focus::ROUNDS),
+                focus::Phase::Break => "Break".to_owned(),
+                focus::Phase::LongBreak => "Long break".to_owned(),
+            };
+            p.text(pos2(chip.right(), chip.bottom() + 9.0), Align2::RIGHT_CENTER, label, font(10.0), fade(self.phase_color(), a));
+        }
+
         // length: two grouped controls (presets, stepper) and a plain reset, inside the wide golden column.
         // Each group is one track with segments, like the tab bar. Locked while a session runs.
         let track_y = o.y + TOP + 64.0;
@@ -97,7 +129,7 @@ impl Notch {
                     c + vec2(ang.cos(), ang.sin()) * 38.0
                 })
                 .collect();
-            p.add(egui::Shape::line(pts, Stroke::new(6.0, fade(ORANGE, a))));
+            p.add(egui::Shape::line(pts, Stroke::new(6.0, fade(self.phase_color(), a))));
         }
         let btn = Rect::from_center_size(c, Vec2::splat(56.0));
         let b = hit(ui, "timertoggle", btn);

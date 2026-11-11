@@ -644,10 +644,13 @@ impl Notch {
     }
 
     fn poll_focus(&mut self) {
-        if !self.focus.tick(Instant::now()) {
-            return;
-        }
-        self.show_toast(ToastIcon::Timer, "Focus complete", "Time for a short break".to_owned());
+        let Some(ended) = self.focus.tick(Instant::now()) else { return };
+        let (title, body) = match (ended, self.focus.rounds()) {
+            (focus::Phase::Focus, true) => ("Focus complete", format!("Break time, {} min", self.focus.total().as_secs() / 60)),
+            (focus::Phase::Focus, false) => ("Focus complete", "Time for a short break".to_owned()),
+            _ => ("Break over", "Back to focus".to_owned()),
+        };
+        self.show_toast(ToastIcon::Timer, title, body);
         if let Some(t) = &mut self.toast {
             t.until = Instant::now() + Duration::from_secs(8);
         }

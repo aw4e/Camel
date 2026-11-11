@@ -5,17 +5,56 @@ use std::time::{Duration, Instant};
 const MIN: Duration = Duration::from_secs(1);
 const MAX: Duration = Duration::from_secs(180 * 60);
 
+const SHORT_BREAK: Duration = Duration::from_secs(5 * 60);
+const LONG_BREAK: Duration = Duration::from_secs(15 * 60);
+/// Focus sessions before the long break.
+pub const ROUNDS: u8 = 4;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Phase {
+    Focus,
+    Break,
+    LongBreak,
+}
+
 pub struct Focus {
+    /// Length of the current phase.
     total: Duration,
     /// Time left as of the last pause (or the full length when idle).
     left: Duration,
     since: Option<Instant>,
+    /// With rounds on, focus and break follow each other by themselves: focus, break, ... and a long break after the
+    /// fourth focus. `focus_len` is the length the user picked for the focus phase.
+    rounds: bool,
+    focus_len: Duration,
+    phase: Phase,
+    /// Focus sessions finished in this cycle.
+    done: u8,
 }
 
 impl Focus {
     pub fn new(minutes: u64) -> Self {
         let total = Duration::from_secs(minutes * 60);
-        Self { total, left: total, since: None }
+        Self { total, left: total, since: None, rounds: false, focus_len: total, phase: Phase::Focus, done: 0 }
+    }
+
+    pub fn rounds(&self) -> bool {
+        self.rounds
+    }
+
+    pub fn phase(&self) -> Phase {
+        self.phase
+    }
+
+    pub fn done(&self) -> u8 {
+        self.done
+    }
+
+    /// Turns rounds on or off. Either way the timer goes back to a stopped focus session.
+    pub fn set_rounds(&mut self, on: bool) {
+        self.rounds = on;
+        (self.phase, self.done, self.since) = (Phase::Focus, 0, None);
+        (self.total, self.left) = (self.focus_len, self.focus_len);
     }
 
     pub fn total(&self) -> Duration {
@@ -45,18 +84,19 @@ impl Focus {
         }
     }
 
-    /// Picks a new length, 1 second to 3 hours. Ignored while running so a stray click cannot wipe a session.
+    /// Picks a new length, 1 second to 3 hours. Ignored while running so a stray click cannot wipe a session, and during
+    /// a break, whose length is fixed.
     pub fn set_duration(&mut self, d: Duration) {
-        if !self.running() {
+        if !self.running() && self.phase == Phase::Focus {
             let d = d.clamp(MIN, MAX);
-            (self.total, self.left) = (d, d);
+            (self.total, self.left, self.focus_len) = (d, d, d);
         }
     }
 
     /// Starts a fresh countdown of `d` right away, replacing whatever was running.
     pub fn start(&mut self, d: Duration, now: Instant) {
         let d = d.clamp(MIN, MAX);
-        *self = Self { total: d, left: d, since: Some(now) };
+        *self = Self { total: d, left: d, since: Some(now), rounds: self.rounds, focus_len: d, phase: Phase::Focus, done: 0 };
     }
 
     pub fn set_minutes(&mut self, minutes: u64) {
@@ -74,13 +114,32 @@ impl Focus {
         self.since = None;
     }
 
-    /// True exactly once, when the countdown reaches zero. The timer then rewinds to the full length.
-    pub fn tick(&mut self, now: Instant) -> bool {
-        let done = self.running() && self.remaining(now).is_zero();
-        if done {
-            self.reset();
+    /// The phase that just ended, exactly once, when the countdown reaches zero. Without rounds the timer rewinds to
+    /// the full length and stops. With rounds the next phase starts at once.
+    pub fn tick(&mut self, now: Instant) -> Option<Phase> {
+        if !(self.running() && self.remaining(now).is_zero()) {
+            return None;
         }
-        done
+        let ended = self.phase;
+        if !self.rounds {
+            self.reset();
+            return Some(ended);
+        }
+        let next = match ended {
+            Phase::Focus => {
+                self.done += 1;
+                if self.done >= ROUNDS { (Phase::LongBreak, LONG_BREAK) } else { (Phase::Break, SHORT_BREAK) }
+            }
+            Phase::Break => (Phase::Focus, self.focus_len),
+            Phase::LongBreak => {
+                self.done = 0;
+                (Phase::Focus, self.focus_len)
+            }
+        };
+        (self.phase, self.total) = (next.0, next.1);
+        self.left = self.total;
+        self.since = Some(now);
+        Some(ended)
     }
 }
 
@@ -153,11 +212,59 @@ mod tests {
         assert_eq!(f.remaining(t0 + Duration::from_secs(999)), Duration::from_secs(25 * 60 - 10));
 
         f.toggle(t0 + Duration::from_secs(20));
-        assert!(!f.tick(t0 + Duration::from_secs(30)));
-        assert!(f.tick(t0 + Duration::from_secs(20 + 25 * 60)));
+        assert_eq!(f.tick(t0 + Duration::from_secs(30)), None);
+        assert_eq!(f.tick(t0 + Duration::from_secs(20 + 25 * 60)), Some(Phase::Focus));
         assert!(!f.running());
         assert_eq!(f.remaining(t0), Duration::from_secs(25 * 60));
-        assert!(!f.tick(t0 + Duration::from_secs(99999)));
+        assert_eq!(f.tick(t0 + Duration::from_secs(99999)), None);
+    }
+
+    #[test]
+    fn rounds_alternate_focus_and_breaks_with_a_long_break_after_four() {
+        let mut t = Instant::now();
+        let mut f = Focus::new(1);
+        f.set_rounds(true);
+        f.toggle(t);
+        let mut seen = Vec::new();
+        for _ in 0..9 {
+            let left = f.remaining(t);
+            t += left;
+            let ended = f.tick(t).expect("the phase ends when its time is up");
+            seen.push((ended, f.phase(), f.running(), f.total().as_secs()));
+        }
+        let (f_, b_, l_) = (Phase::Focus, Phase::Break, Phase::LongBreak);
+        assert_eq!(
+            seen,
+            [
+                (f_, b_, true, 300),
+                (b_, f_, true, 60),
+                (f_, b_, true, 300),
+                (b_, f_, true, 60),
+                (f_, b_, true, 300),
+                (b_, f_, true, 60),
+                (f_, l_, true, 900),
+                (l_, f_, true, 60),
+                (f_, b_, true, 300),
+            ]
+        );
+        assert_eq!(f.done(), 1, "the count started again after the long break");
+    }
+
+    #[test]
+    fn rounds_leave_the_break_length_alone_and_turning_them_off_goes_back_to_focus() {
+        let t = Instant::now();
+        let mut f = Focus::new(25);
+        f.set_rounds(true);
+        f.toggle(t);
+        f.tick(t + Duration::from_secs(25 * 60));
+        assert_eq!(f.phase(), Phase::Break);
+        f.reset();
+        f.set_minutes(45);
+        assert_eq!(f.total(), Duration::from_secs(300), "a break cannot be resized");
+        f.set_rounds(false);
+        assert_eq!((f.phase(), f.running(), f.total().as_secs(), f.done()), (Phase::Focus, false, 25 * 60, 0));
+        f.start(Duration::from_secs(600), t);
+        assert!(!f.rounds());
     }
 
     #[test]

@@ -8,6 +8,11 @@ impl Notch {
         self.art_tex.as_ref().map_or(Color32::from_gray(200), |a| a.2)
     }
 
+    /// Orange while focusing, green during a break.
+    pub(crate) fn phase_color(&self) -> Color32 {
+        if self.focus.phase() == crate::focus::Phase::Focus { ORANGE } else { GREEN }
+    }
+
     pub(crate) fn dots_active(&self) -> bool {
         let s = &self.monitor.stats;
         self.settings.privacy_dots && (s.mic || s.cam)
@@ -35,7 +40,7 @@ impl Notch {
             let running = self.focus.running();
             let (text, color) = if running {
                 let left = self.focus.remaining(Instant::now()).as_secs_f32().ceil() as u64;
-                (format!("{:02}:{:02}", left / 60, left % 60), ORANGE)
+                (format!("{:02}:{:02}", left / 60, left % 60), self.phase_color())
             } else {
                 (clock_text(&Local::now(), self.h24), Color32::WHITE.gamma_multiply(0.9))
             };
@@ -48,7 +53,7 @@ impl Notch {
             }
             // a ring beside the clock: the session while the timer runs, otherwise the battery
             let ring = if running {
-                Some((self.focus.progress(Instant::now()), ORANGE))
+                Some((self.focus.progress(Instant::now()), self.phase_color()))
             } else {
                 self.monitor.stats.battery.map(|b| {
                     (

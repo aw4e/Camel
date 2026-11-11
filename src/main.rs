@@ -20,6 +20,7 @@ mod system;
 mod ui;
 mod update;
 mod widgets;
+mod worldtime;
 
 use eframe::egui::{self, vec2};
 use layout::{PILL_H, PILL_W};
