@@ -249,6 +249,8 @@ pub(crate) struct Notch {
     lyrics_view: bool,
     /// Fractional index of the lyric line the view is scrolled to.
     lyric_pos: f32,
+    /// Width the closed notch wants for the lyric line it shows, 0 when it shows none. Set while drawing.
+    lyric_w: std::cell::Cell<f32>,
     /// Seconds the lyrics are ahead of the player for the current track, and which track that is.
     lyric_offset: f64,
     lyric_track: String,
@@ -349,6 +351,7 @@ impl Notch {
             tab_scroll: 0.0,
             lyrics_view: false,
             lyric_pos: 0.0,
+            lyric_w: std::cell::Cell::new(0.0),
             lyric_offset: 0.0,
             lyric_track: String::new(),
             updater: update::Updater::new(),
@@ -836,6 +839,7 @@ impl Notch {
             ),
             Mode::Toast => TOAST,
             Mode::Compact if self.settings.minimal => MINIMAL,
+            Mode::Compact if self.lyric_w.get() > 0.0 && !self.dots_active() => vec2(self.lyric_w.get(), PILL_H),
             Mode::Compact => vec2(PILL_W + if self.dots_active() { 30.0 } else { 0.0 }, PILL_H),
         };
         self.w.step(target.x, dt);
