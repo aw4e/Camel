@@ -819,7 +819,16 @@ impl Notch {
     fn fit_window(&mut self, ctx: &egui::Context, mode: Mode, dt: f32) -> (Vec2, bool) {
         let target = match mode {
             Mode::Spot => vec2(SPOT_W, 52.0 + if self.spot.hits.is_empty() { 0.0 } else { 8.0 + 40.0 * self.spot.hits.len() as f32 }),
-            Mode::Open => vec2(OPEN_W, if self.tab == Tab::Clock && month_rows(Local::now().date_naive()) > 5 { OPEN_H + 14.0 } else { OPEN_H }),
+            Mode::Open => vec2(
+                OPEN_W,
+                if self.tab == Tab::Controls {
+                    CONTROLS_H
+                } else if self.tab == Tab::Clock && month_rows(Local::now().date_naive()) > 5 {
+                    OPEN_H + 14.0
+                } else {
+                    OPEN_H
+                },
+            ),
             Mode::Toast => TOAST,
             Mode::Compact if self.settings.minimal => MINIMAL,
             Mode::Compact => vec2(PILL_W + if self.dots_active() { 30.0 } else { 0.0 }, PILL_H),
