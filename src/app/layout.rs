@@ -106,6 +106,7 @@ mod tests {
         assert!(room(list(APPS_TOP), OPEN_H) >= GAP_S, "apps");
         assert!(room(list(APPS_TOP + ROW_PITCH) - ROW_PITCH, OPEN_H) >= GAP_S, "apps with the leftovers banner");
         assert!(room(TOP + 90.0, OPEN_H) >= GAP_S, "shelf");
+        assert!(room(TOP + 3.0 * 28.0 + 2.0 * GAP_S, OPEN_H) >= GAP_S, "controls: three rows of tiles beside the weather card");
         assert!(room(APPS_TOP + 3.0 * 21.0, OPEN_H) >= GAP_S, "settings, three rows in a column");
         assert!(room(TOP + 75.0 + 18.0, OPEN_H) >= GAP_S, "media controls");
         assert!(room(TOP + 38.0 + 2.0 * ROW_PITCH + 7.0, OPEN_H) >= GAP_S, "mixer");

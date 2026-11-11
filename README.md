@@ -76,7 +76,7 @@ page has three groups, chosen with the chips at the top:
 |  | Spotlight (Alt+Space) | Enables the launcher and its hotkey. |
 |  | Check for updates | Looks for a newer release shortly after start and then daily. |
 | Media and data | Synced lyrics | Fetches lyrics for the current track. |
-|  | Weather | Temperature and humidity on the Clock page. |
+|  | Weather | Temperature in the closed notch and the weather card on the Controls page. |
 |  | Clipboard history | Records what you copy. Off means Camel never reads the clipboard. |
 | Alerts | Privacy indicators | Shows dots while a microphone or camera is in use. |
 |  | Volume HUD | Shows a bar when the master volume or mute changes. |
@@ -101,8 +101,8 @@ page has three groups, chosen with the chips at the top:
 | **Apps** | Installed programs with a search box: uninstall them, clean up leftovers, and switch startup items on or off. |
 | **Updates** | Checks GitHub for a newer release and installs it when you ask. |
 | **Tasks** | A page with a field to add a reminder or to-do and the list of what is pending; click the circle to tick one off. Also from Spotlight with `remind` and `todo`. A toast and a beep when one is due. |
-| **Controls** | The Controls page, in the System group, has quick tiles: Wi-Fi, Bluetooth, microphone mute, sound mute, keep awake and weather. A lit tile is on; click to flip it. |
-| **Weather** | Temperature next to the clock in the closed notch, and temperature, humidity and the weather where you are at the top right of the Clock page. On by default; switch it off with the Weather tile, or `weather` in Spotlight. |
+| **Controls** | One panel in the System group: the weather card on the left, and tiles for Wi-Fi, Bluetooth, microphone mute, sound mute, keep awake and the minimal notch. A lit tile is on; click to flip it. |
+| **Weather** | Temperature next to the clock in the closed notch, and a card on the Controls page with the temperature, conditions, humidity and place. On by default; click the card to switch it off, or use `weather` in Spotlight. |
 | **Alerts** | Notices for Caps Lock, keyboard language, losing or regaining internet and a new audio output. |
 | **Minimal notch** | A tray option that shrinks the closed notch to a thin line, for screens with thick top bezels. |
 | **Tray icon** | Keep awake, Minimal notch, Settings and Quit. |
@@ -135,7 +135,7 @@ breaks and the label shows where you are in the cycle.
 **Now playing.** When several players are open, hover the album art to see which one is shown and click it to switch.
 
 **Weather.** The location comes from Windows (Settings, Privacy, Location, which must allow desktop apps) and is rounded
-to two decimals before it is sent. If Windows gives none, the Clock page says "No location"; type `city` and a name in
+to two decimals before it is sent. If Windows gives none, the weather card says "No location"; type `city` and a name in
 Spotlight to use that instead. The place shown is the time zone's city, such as Jakarta, and the reading refreshes every
 20 minutes. Temperatures are in °C.
 

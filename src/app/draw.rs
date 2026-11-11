@@ -286,7 +286,7 @@ impl Notch {
             Tab::Apps => self.tab_apps(ui, o, content),
             Tab::Tasks => self.tab_tasks(ui, o, content),
             Tab::Controls => self.tab_controls(ui, o, content),
-            Tab::Clock => super::pages::clock::tab_clock(&p, o, content, self.h24, &self.weather.status()),
+            Tab::Clock => super::pages::clock::tab_clock(&p, o, content, self.h24),
             Tab::Mixer => self.tab_mixer(ui, o, content),
             Tab::Settings => self.tab_settings(ui, o, content),
         }

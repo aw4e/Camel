@@ -320,6 +320,10 @@ pub fn battery_gauge(p: &Painter, left_center: Pos2, pct: u8, charging: bool, f:
     p.rect_filled(Rect::from_min_size(inner.min, vec2(inner.width() * pct as f32 / 100.0, inner.height())), 1.5, fade(level, f));
 }
 
+pub fn icon_pill(p: &Painter, c: Pos2, col: Color32) {
+    p.rect_filled(Rect::from_center_size(c, vec2(12.0, 3.0)), 1.5, col);
+}
+
 pub fn icon_search(p: &Painter, c: Pos2, col: Color32) {
     p.circle_stroke(c + vec2(-1.5, -1.5), 6.0, Stroke::new(1.8, col));
     seg(p, c, (2.9, 2.9), (7.8, 7.8), 1.9, col);

@@ -1,27 +1,6 @@
 use crate::prelude::*;
 use chrono::{Datelike, Local, NaiveDate, Timelike};
 
-/// Temperature, humidity and place at the right edge of the wide column, next to the time.
-fn weather_block(p: &egui::Painter, o: egui::Pos2, a: f32, status: &crate::weather::Status) {
-    use crate::weather::{Status, describe};
-    let right = o.x + MARGIN + phi_columns().0;
-    match status {
-        Status::Ready(w) => {
-            p.text(pos2(right, o.y + TOP + 8.0), Align2::RIGHT_CENTER, format!("{:.0}°", w.temp), font(26.0), fade(Color32::WHITE, a));
-            p.text(pos2(right, o.y + TOP + 31.0), Align2::RIGHT_CENTER, format!("{}% humidity", w.humidity), font(10.5), fade(GRAY, a));
-            let place = if w.place.is_empty() { describe(w.code).to_owned() } else { format!("{} · {}", describe(w.code), shorten(&w.place, 12)) };
-            p.text(pos2(right, o.y + TOP + 44.0), Align2::RIGHT_CENTER, place, font(10.5), fade(DIM, a));
-        }
-        Status::NoLocation => {
-            p.text(pos2(right, o.y + TOP + 10.0), Align2::RIGHT_CENTER, "No location", font(10.5), fade(DIM, a));
-        }
-        Status::Failed(_) => {
-            p.text(pos2(right, o.y + TOP + 10.0), Align2::RIGHT_CENTER, "Weather offline", font(10.5), fade(DIM, a));
-        }
-        Status::Loading | Status::Off => {}
-    }
-}
-
 /// First weekday (Monday = 0) and length of the month `d` is in.
 pub(crate) fn month_grid(d: NaiveDate) -> (u32, u32) {
     let first = d.with_day(1).unwrap_or(d);
@@ -36,7 +15,7 @@ pub(crate) fn month_rows(d: NaiveDate) -> u32 {
     (lead + days).div_ceil(7)
 }
 
-pub(crate) fn tab_clock(p: &egui::Painter, o: egui::Pos2, a: f32, h24: bool, weather: &crate::weather::Status) {
+pub(crate) fn tab_clock(p: &egui::Painter, o: egui::Pos2, a: f32, h24: bool) {
     let now = Local::now();
     // seconds sit after the measured width of the time, on the same baseline
     let digits = if h24 { now.format("%H:%M") } else { now.format("%-I:%M") }.to_string();
@@ -49,8 +28,6 @@ pub(crate) fn tab_clock(p: &egui::Painter, o: egui::Pos2, a: f32, h24: bool, wea
     p.galley(origin, time, Color32::WHITE);
     p.text(o + vec2(MARGIN, 92.0), Align2::LEFT_TOP, now.format("%A").to_string().to_uppercase(), bold(11.0), fade(RED, a));
     p.text(o + vec2(MARGIN, 106.0), Align2::LEFT_TOP, now.format("%d %B %Y").to_string(), font(13.0), fade(Color32::WHITE, a));
-
-    weather_block(p, o, a, weather);
 
     // the whole month, Monday first, in the narrow golden column: red month name, red disc on today, weekends dimmer
     let today = now.date_naive();
