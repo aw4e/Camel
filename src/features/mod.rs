@@ -1,5 +1,6 @@
 pub(crate) mod actions;
 pub(crate) mod apps;
+pub(crate) mod channels;
 pub(crate) mod clipboard;
 pub(crate) mod currency;
 pub(crate) mod focus;

@@ -365,21 +365,28 @@ pub fn marquee(p: &Painter, pos: Pos2, max_w: f32, text: &str, font: FontId, col
     p.galley(pos - vec2(off - w - gap, 0.0), galley, col);
 }
 
-/// Horizontal slider. Returns the new value while the user is dragging or clicking.
-pub fn slider(ui: &mut Ui, id: egui::Id, rect: Rect, value: f32, f: f32) -> Option<f32> {
-    let resp = ui.interact(rect.expand2(vec2(0.0, 6.0)), id, Sense::click_and_drag());
-    let v_at = |x: f32| ((x - rect.left()) / rect.width()).clamp(0.0, 1.0);
-    let new = (resp.dragged() || resp.clicked()).then(|| resp.interact_pointer_pos().map(|p| v_at(p.x))).flatten();
+/// Vertical fader like the ones on a mixing desk: drag or click to set the level, 1.0 at the top. Returns the new
+/// value while the user is dragging or clicking. A disabled fader is only drawn.
+pub fn vslider(ui: &mut Ui, id: egui::Id, rect: Rect, value: f32, enabled: bool, f: f32) -> Option<f32> {
+    let resp = enabled.then(|| ui.interact(rect.expand2(vec2(8.0, 6.0)), id, Sense::click_and_drag()));
+    let new = resp
+        .as_ref()
+        .filter(|r| r.dragged() || r.clicked())
+        .and_then(|r| r.interact_pointer_pos())
+        .map(|p| (1.0 - (p.y - rect.top()) / rect.height()).clamp(0.0, 1.0));
     let shown = new.unwrap_or(value).clamp(0.0, 1.0);
 
-    let track = Rect::from_center_size(rect.center(), vec2(rect.width(), 4.0));
-    let x = track.left() + track.width() * shown;
-    let r = if resp.hovered() || resp.dragged() { 7.0 } else { 6.0 };
+    let track = Rect::from_center_size(rect.center(), vec2(4.0, rect.height()));
+    let y = track.bottom() - track.height() * shown;
+    let lit = resp.as_ref().is_some_and(|r| r.hovered() || r.dragged());
     let p = ui.painter();
     p.rect_filled(track, 2.0, fade(fill(46), f));
-    p.rect_filled(Rect::from_min_max(track.min, pos2(x, track.bottom())), 2.0, fade(Color32::from_gray(235), f));
-    p.circle_filled(pos2(x, track.center().y + 0.8), r + 0.5, fade(Color32::from_black_alpha(110), f));
-    p.circle_filled(pos2(x, track.center().y), r, fade(Color32::WHITE, f));
+    if enabled {
+        p.rect_filled(Rect::from_min_max(pos2(track.left(), y), track.max), 2.0, fade(Color32::from_gray(235), f));
+    }
+    let knob = Rect::from_center_size(pos2(track.center().x, y), vec2(if lit { 22.0 } else { 20.0 }, 9.0));
+    p.rect_filled(knob.translate(vec2(0.0, 0.8)), 3.0, fade(Color32::from_black_alpha(110), f));
+    p.rect_filled(knob, 3.0, fade(if enabled { Color32::WHITE } else { Color32::from_gray(70) }, f));
     new
 }
 

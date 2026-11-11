@@ -2,7 +2,7 @@
 
 use std::ptr::null;
 use sysinfo::{Pid, ProcessesToUpdate, System};
-use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
+use windows::Win32::Media::Audio::Endpoints::{IAudioEndpointVolume, IAudioMeterInformation};
 use windows::Win32::Media::Audio::{
     AudioSessionStateActive, IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator, ISimpleAudioVolume, MMDeviceEnumerator, eCapture, eConsole,
     eRender,
@@ -13,7 +13,11 @@ use windows::core::Interface;
 pub struct AppVolume {
     pub name: String,
     pub level: f32,
+    pub muted: bool,
+    /// How loud the app is right now, 0..1; updated by `read_peaks`.
+    pub peak: f32,
     ctl: ISimpleAudioVolume,
+    meter: Option<IAudioMeterInformation>,
 }
 
 pub struct Mixer {
@@ -51,7 +55,8 @@ impl Mixer {
                 // returns S_OK (0) for system sounds, S_FALSE (1) for others; both count as is_ok()
                 let name = if ctl2.IsSystemSoundsSession().0 == 0 { "System sounds".to_owned() } else { self.process_name(ctl2.GetProcessId()?) };
                 let ctl: ISimpleAudioVolume = session.cast()?;
-                apps.push(AppVolume { name, level: ctl.GetMasterVolume()?, ctl });
+                let (level, muted) = (ctl.GetMasterVolume()?, ctl.GetMute()?.as_bool());
+                apps.push(AppVolume { name, level, muted, peak: 0.0, ctl, meter: session.cast().ok() });
             }
             self.apps = apps;
         }
@@ -73,6 +78,20 @@ impl Mixer {
     pub fn set_master(&mut self, v: f32) {
         self.master = v;
         let _ = unsafe { self.endpoint.SetMasterVolumeLevelScalar(v, null()) };
+    }
+
+    /// The current loudness of every app, a cheap read that can run every frame.
+    pub fn read_peaks(&mut self) {
+        for a in &mut self.apps {
+            a.peak = a.meter.as_ref().and_then(|m| unsafe { m.GetPeakValue().ok() }).unwrap_or(0.0);
+        }
+    }
+
+    pub fn set_app_muted(&mut self, i: usize, muted: bool) {
+        if let Some(a) = self.apps.get_mut(i) {
+            a.muted = muted;
+            let _ = unsafe { a.ctl.SetMute(muted, null()) };
+        }
     }
 
     pub fn set_app(&mut self, i: usize, v: f32) {

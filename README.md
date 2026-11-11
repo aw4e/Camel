@@ -92,7 +92,7 @@ page has three groups, chosen with the chips at the top:
 | **Clipboard history** | The last eight things you copied, text and pictures. Click to copy again, right-click to remove, hover to pin. Kept in memory only. |
 | **Clock** | Time, date and the whole month, with today marked. It follows the Windows 12 or 24-hour setting. The notch grows by 14 px in months that need six rows. |
 | **Focus timer** | A countdown with a progress ring and a length you set yourself, from 1 second to 3 hours. The time left shows in the closed pill, with a ring beside it. Optional rounds run focus and breaks on their own. |
-| **Mixer** | Master volume plus a slider for each app that is playing audio. |
+| **Mixer** | A channel mixer in the style of Elgato Wave Link: playing apps are grouped into System, Music, Browser, Voice and Game channels, each with a fader, a level meter and a mute button, plus a master strip. |
 | **Spotlight** | A launcher for apps, files, a calculator, unit conversion, system actions and the web. See [Spotlight commands](#spotlight-commands). |
 | **Volume HUD** | A bar with the level shows in the notch when the master volume or mute changes. It stays quiet while the Mixer page is open. |
 | **Keep awake** | Stops the screen and sleep from turning off. Switch it on from the tray menu or by typing `awake` in Spotlight. A small sun shows in the closed pill while it is on. Off again every time Camel starts. |
@@ -133,6 +133,12 @@ break starts by itself, then focus again, and after the fourth focus session a 1
 breaks and the label shows where you are in the cycle.
 
 **Now playing.** When several players are open, hover the album art to see which one is shown and click it to switch.
+
+**Mixer.** Apps are placed in a channel by a list of well-known names (Spotify and VLC in Music, browsers in Browser,
+Discord and Teams in Voice, system sounds in System) and everything else lands in Game. Click an app's name under a strip to
+move it to the next channel; Camel remembers the choice by app name. A channel's fader sets the volume of every app in it, and
+its mute button mutes them all. It uses the same per-app volume Windows' own volume mixer uses, so levels you set stay when
+Camel closes. It does not create virtual audio devices (that needs a driver), so there is no separate stream mix.
 
 **Weather.** The location comes from Windows (Settings, Privacy, Location, which must allow desktop apps) and is rounded
 to two decimals before it is sent. If Windows gives none, the weather card says "No location"; type `city` and a name in
@@ -283,6 +289,7 @@ src/services/                what talks to Windows or the network
     platform.rs              tray, hotkey, fonts, window frame, elevation
 src/features/                logic that needs no window
     actions.rs  spotlight.rs Spotlight actions and search, calculator, unit conversion
+    channels.rs              mixer channels: which app belongs where
     apps.rs  clipboard.rs    installed programs and uninstall, clipboard history and pins
     focus.rs  reminders.rs   focus timer and rounds, reminders and to-dos
     notes.rs  worldtime.rs   quick notes, time in other cities and days to a date

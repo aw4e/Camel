@@ -25,6 +25,8 @@ pub struct Settings {
     pub weather: bool,
     /// A city to use instead of the Windows location.
     pub city: String,
+    /// Apps the user moved to another mixer channel, by lowercase app name.
+    pub channel_overrides: std::collections::HashMap<String, usize>,
     /// Which version of the defaults this file was written for; a file without one is older than any version.
     #[serde(default)]
     pub version: u32,
@@ -48,6 +50,7 @@ impl Default for Settings {
             minimal: false,
             weather: true,
             city: String::new(),
+            channel_overrides: Default::default(),
             version: VERSION,
         }
     }

@@ -198,7 +198,6 @@ pub(crate) struct Notch {
     art_tex: Option<(Arc<media::Art>, egui::TextureHandle, Color32)>,
     mixer: Option<mixer::Mixer>,
     mixer_at: Instant,
-    mixer_scroll: usize,
     shelf: Vec<PathBuf>,
     shelf_scroll: usize,
     history: clipboard::History,
@@ -307,7 +306,6 @@ impl Notch {
             art_tex: None,
             mixer: None,
             mixer_at: Instant::now(),
-            mixer_scroll: 0,
             shelf: Vec::new(),
             shelf_scroll: 0,
             history: clipboard::History::default(),
@@ -796,10 +794,6 @@ impl Notch {
             if step != 0 && self.tab == Tab::Shelf {
                 bump(&mut self.shelf_scroll, self.shelf.len().saturating_sub(5));
             }
-            if step != 0 && self.tab == Tab::Mixer {
-                let n = self.mixer.as_ref().map_or(0, |m| m.apps.len());
-                bump(&mut self.mixer_scroll, n.saturating_sub(3));
-            }
             if step != 0 && self.tab == Tab::Apps {
                 bump(&mut self.apps_scroll, self.apps_n.saturating_sub(3));
             }
@@ -825,6 +819,8 @@ impl Notch {
                 OPEN_W,
                 if self.tab == Tab::Controls {
                     CONTROLS_H
+                } else if self.tab == Tab::Mixer {
+                    MIXER_H
                 } else if self.tab == Tab::Clock && month_rows(Local::now().date_naive()) > 5 {
                     OPEN_H + 14.0
                 } else {

@@ -4,6 +4,8 @@ pub(crate) const PILL_W: f32 = 196.0;
 pub(crate) const PILL_H: f32 = 34.0;
 pub(crate) const OPEN_W: f32 = 460.0;
 pub(crate) const OPEN_H: f32 = 136.0;
+/// The mixer page: strips 152 px tall, and one standard gap (13) below them.
+pub(crate) const MIXER_H: f32 = TOP + 152.0 + 13.0;
 /// The Controls page has room to breathe: three rows of 34 px tiles with 8 px gaps, and one standard gap (13) below.
 pub(crate) const CONTROLS_TILE_H: f32 = 34.0;
 pub(crate) const CONTROLS_H: f32 = TOP + 3.0 * CONTROLS_TILE_H + 2.0 * 8.0 + 13.0;
@@ -109,6 +111,7 @@ mod tests {
         assert!(room(list(APPS_TOP), OPEN_H) >= GAP_S, "apps");
         assert!(room(list(APPS_TOP + ROW_PITCH) - ROW_PITCH, OPEN_H) >= GAP_S, "apps with the leftovers banner");
         assert!(room(TOP + 90.0, OPEN_H) >= GAP_S, "shelf");
+        assert!(room(TOP + 152.0, MIXER_H) >= GAP_L, "mixer strips");
         assert!(room(TOP + 3.0 * CONTROLS_TILE_H + 2.0 * GAP, CONTROLS_H) >= GAP_L, "controls: three rows of tiles beside the weather card");
         assert!(room(APPS_TOP + 3.0 * 21.0, OPEN_H) >= GAP_S, "settings, three rows in a column");
         assert!(room(TOP + 75.0 + 18.0, OPEN_H) >= GAP_S, "media controls");
