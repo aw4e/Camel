@@ -288,6 +288,21 @@ pub fn icon_tasks(p: &Painter, c: Pos2, col: Color32) {
     path(p, c, &[(-3.6, 0.2), (-1.0, 2.9), (3.8, -2.8)], 0.0, false, W, col);
 }
 
+pub fn icon_bluetooth(p: &Painter, c: Pos2, col: Color32) {
+    path(p, c, &[(-4.5, -3.8), (4.5, 3.8), (0.0, 8.0), (0.0, -8.0), (4.5, -3.8), (-4.5, 3.8)], 0.0, false, W, col);
+}
+
+pub fn icon_sliders(p: &Painter, c: Pos2, col: Color32) {
+    seg(p, c, (-7.0, -3.5), (7.0, -3.5), W, col);
+    seg(p, c, (-7.0, 3.5), (7.0, 3.5), W, col);
+    p.circle_filled(at(c, (-2.5, -3.5)), 2.4, col);
+    p.circle_filled(at(c, (3.0, 3.5)), 2.4, col);
+}
+
+pub fn icon_pill(p: &Painter, c: Pos2, col: Color32) {
+    p.rect_filled(Rect::from_center_size(c, vec2(14.0, 3.0)), 1.5, col);
+}
+
 pub fn icon_search(p: &Painter, c: Pos2, col: Color32) {
     p.circle_stroke(c + vec2(-1.5, -1.5), 6.0, Stroke::new(1.8, col));
     seg(p, c, (2.9, 2.9), (7.8, 7.8), 1.9, col);
@@ -308,22 +323,6 @@ pub fn equalizer(p: &Painter, center: Pos2, bars: usize, playing: bool, time: f3
         let x = center.x + (i as f32 - (bars - 1) as f32 / 2.0) * 5.0;
         p.rect_filled(Rect::from_center_size(pos2(x, center.y), vec2(3.0, h)), 1.5, color);
     }
-}
-
-pub fn battery_gauge(p: &Painter, left_center: Pos2, pct: u8, charging: bool, f: f32) {
-    let body = Rect::from_min_size(left_center - vec2(0.0, 5.5), vec2(22.0, 11.0));
-    let edge = fade(Color32::from_gray(160), f);
-    p.rect_stroke(body, 3.0, Stroke::new(1.0, edge), StrokeKind::Inside);
-    p.rect_filled(Rect::from_center_size(pos2(body.right() + 2.0, body.center().y), vec2(2.0, 4.0)), 1.0, edge);
-    let level = if charging {
-        GREEN
-    } else if pct <= 20 {
-        RED
-    } else {
-        Color32::WHITE
-    };
-    let inner = body.shrink(2.0);
-    p.rect_filled(Rect::from_min_size(inner.min, vec2(inner.width() * pct as f32 / 100.0, inner.height())), 1.5, fade(level, f));
 }
 
 /// Text that scrolls sideways when wider than `max_w`.

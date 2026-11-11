@@ -93,6 +93,7 @@ Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by defau
 | **Apps** | Installed programs with a search box: uninstall them, clean up leftovers, and switch startup items on or off. |
 | **Updates** | Checks GitHub for a newer release and installs it when you ask. |
 | **Tasks** | A page with a field to add a reminder or to-do and the list of what is pending; click the circle to tick one off. Also from Spotlight with `remind` and `todo`. A toast and a beep when one is due. |
+| **Controls** | The sliders button beside the gear opens quick tiles: Wi-Fi, Bluetooth, microphone mute, sound mute, keep awake and minimal notch. A lit tile is on; click to flip it. |
 | **Alerts** | Notices for Caps Lock, keyboard language, losing or regaining internet and a new audio output. |
 | **Minimal notch** | A tray option that shrinks the closed notch to a thin line, for screens with thick top bezels. |
 | **Tray icon** | Keep awake, Minimal notch, Settings and Quit. |
@@ -123,6 +124,10 @@ break starts by itself, then focus again, and after the fourth focus session a 1
 breaks and the label shows where you are in the cycle.
 
 **Now playing.** When several players are open, hover the album art to see which one is shown and click it to switch.
+
+**Controls.** Wi-Fi and Bluetooth are switched through the Windows radio settings, the same as the Quick Settings tiles. A PC
+without that radio (many desktops have no Wi-Fi) shows the tile as "Not available". Switching Wi-Fi or Bluetooth off cuts
+whatever is using it, so a Bluetooth mouse or headphones disconnect.
 
 **Alerts.** The Caps Lock and language notice is checked every quarter second. The language is the keyboard layout of the
 window you are typing in, so switching to an app with another layout shows it too. The connection and audio output checks
@@ -244,7 +249,7 @@ if you want that look.
 src/main.rs                  entry point
 src/notch.rs                 app state, input, animation, window sizing
 src/notch/draw.rs            closed pill, toast and the tab bar
-src/notch/tabs/              one file per page: media, mixer, clock, timer, tasks, shelf, clipboard, apps, settings
+src/notch/tabs/              one file per page: media, mixer, clock, timer, tasks, controls, shelf, clipboard, apps, settings
 src/notch/spotlight_view.rs  Spotlight panel
 src/layout.rs                golden-ratio and Fibonacci layout tokens, with tests
 src/platform.rs              tray, hotkey, fonts, window frame, elevation
@@ -263,6 +268,7 @@ src/notes.rs                 quick notes
 src/update.rs                release check, verified download, in-place swap
 src/reminders.rs             reminders and to-dos, parsing and storage
 src/worldtime.rs            time in other cities and days to a date
+src/radios.rs               Wi-Fi and Bluetooth on or off
 src/system.rs               Windows queries: clock format, animation setting, keyboard, network, audio output
 src/focus.rs                 focus timer
 ```

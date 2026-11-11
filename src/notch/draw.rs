@@ -193,6 +193,19 @@ impl Notch {
             self.tab = if on { Tab::Media } else { Tab::Settings };
         }
 
+        let controls = Rect::from_center_size(pos2(right - 28.0, o.y + 16.0), vec2(24.0, 22.0));
+        let c = hit(ui, "controls", controls).on_hover_text("Controls");
+        let open = self.tab == Tab::Controls;
+        if open || c.hovered() {
+            p.rect_filled(controls, 12.0, fade(fill(if open { 46 } else { 24 }), a));
+        }
+        ui::scaled(&p, controls.center(), ui::icon_fit(controls.height()), || {
+            ui::icon_sliders(&p, controls.center(), fade(if open || c.hovered() { Color32::WHITE } else { GRAY }, a))
+        });
+        if c.clicked() {
+            self.tab = if open { Tab::Media } else { Tab::Controls };
+        }
+
         if on {
             let q = Rect::from_center_size(pos2(right - 44.0, o.y + 16.0), vec2(46.0, 18.0));
             let r = hit(ui, "quit", q);
@@ -205,7 +218,7 @@ impl Notch {
         } else {
             let s = &self.monitor.stats;
             let dots = self.settings.privacy_dots && (s.mic || s.cam);
-            let mut x = right - 28.0;
+            let mut x = right - 46.0;
             // eight tabs leave room for the privacy dots or for the readout, not both; the dots win while a mic or camera is on
             if dots {
                 for (on, col, is_mic) in [(s.mic, GREEN, true), (s.cam, ORANGE, false)] {
@@ -219,11 +232,17 @@ impl Notch {
                     }
                 }
             } else if let Some(b) = s.battery {
-                ui::battery_gauge(&p, pos2(x - 24.0, o.y + 16.0), b, s.charging, a);
-                p.text(pos2(x - 31.0, o.y + 16.0), Align2::RIGHT_CENTER, format!("{b}%"), bold(12.0), fade(Color32::WHITE, a));
+                let col = if s.charging || b > 20 {
+                    Color32::WHITE
+                } else if b > 15 {
+                    ORANGE
+                } else {
+                    RED
+                };
+                p.text(pos2(x, o.y + 16.0), Align2::RIGHT_CENTER, format!("{b}%"), bold(12.0), fade(col, a));
             } else {
-                p.text(pos2(x, o.y + 10.0), Align2::RIGHT_CENTER, format!("CPU {:.0}%", s.cpu), font(9.5), fade(GRAY, a));
-                p.text(pos2(x, o.y + 22.0), Align2::RIGHT_CENTER, format!("RAM {:.0}%", s.ram), font(9.5), fade(GRAY, a));
+                p.text(pos2(x, o.y + 10.0), Align2::RIGHT_CENTER, format!("CPU {:.0}%", s.cpu), font(9.0), fade(GRAY, a));
+                p.text(pos2(x, o.y + 22.0), Align2::RIGHT_CENTER, format!("RAM {:.0}%", s.ram), font(9.0), fade(GRAY, a));
             }
         }
 
@@ -234,6 +253,7 @@ impl Notch {
             Tab::Timer => self.tab_timer(ui, o, content),
             Tab::Apps => self.tab_apps(ui, o, content),
             Tab::Tasks => self.tab_tasks(ui, o, content),
+            Tab::Controls => self.tab_controls(ui, o, content),
             Tab::Clock => super::tabs::clock::tab_clock(&p, o, content, self.h24),
             Tab::Mixer => self.tab_mixer(ui, o, content),
             Tab::Settings => self.tab_settings(ui, o, content),

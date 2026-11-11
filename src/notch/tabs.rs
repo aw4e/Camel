@@ -1,6 +1,7 @@
 mod apps;
 mod clipboard;
 pub(crate) mod clock;
+mod controls;
 mod media;
 mod mixer;
 mod settings;

@@ -112,3 +112,12 @@ pub fn toggle_mute(mic: bool) -> Option<bool> {
         Some(muted)
     }
 }
+
+/// Whether the default speakers (or microphone) are muted; None when there is no such device.
+pub fn is_muted(mic: bool) -> Option<bool> {
+    unsafe {
+        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        let device = enumerator.GetDefaultAudioEndpoint(if mic { eCapture } else { eRender }, eConsole).ok()?;
+        Some(device.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None).ok()?.GetMute().ok()?.as_bool())
+    }
+}

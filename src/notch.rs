@@ -5,7 +5,7 @@ mod tabs;
 use crate::platform::{self, HOTKEY_PRESSED, Tray};
 use crate::prelude::*;
 use crate::settings::{self, Settings};
-use crate::{actions, apps, clipboard, focus, media, mixer, monitor, notes, reminders, spotlight, system, update};
+use crate::{actions, apps, clipboard, focus, media, mixer, monitor, notes, radios, reminders, spotlight, system, update};
 use chrono::Local;
 use global_hotkey::GlobalHotKeyManager;
 use global_hotkey::hotkey::HotKey;
@@ -18,6 +18,7 @@ use tray_icon::menu::MenuEvent;
 fn tab_icon(t: Tab) -> fn(&egui::Painter, egui::Pos2, Color32) {
     match t {
         Tab::Media => ui::icon_music,
+        Tab::Controls => ui::icon_sliders,
         Tab::Tasks => ui::icon_tasks,
         Tab::Mixer => ui::icon_speaker,
         Tab::Clock => ui::icon_clock,
@@ -32,6 +33,7 @@ fn tab_icon(t: Tab) -> fn(&egui::Painter, egui::Pos2, Color32) {
 fn tab_label(t: Tab) -> &'static str {
     match t {
         Tab::Media => "Now playing",
+        Tab::Controls => "Controls",
         Tab::Tasks => "Tasks",
         Tab::Mixer => "Volume mixer",
         Tab::Clock => "Clock",
@@ -49,6 +51,7 @@ pub(crate) enum Tab {
     Shelf,
     Clipboard,
     Tasks,
+    Controls,
     Clock,
     Timer,
     Mixer,
@@ -213,6 +216,11 @@ pub(crate) struct Notch {
     lyric_offset: f64,
     lyric_track: String,
     updater: update::Updater,
+    /// Wi-Fi and Bluetooth, and the mute state of the microphone and speakers as the controls page last read them.
+    radios: radios::Radios,
+    controls_at: Instant,
+    mic_muted: Option<bool>,
+    speakers_muted: Option<bool>,
     /// What is being typed into the Tasks page, and how far its list is scrolled.
     task_input: String,
     tasks_scroll: usize,
@@ -305,6 +313,10 @@ impl Notch {
             lyric_offset: 0.0,
             lyric_track: String::new(),
             updater: update::Updater::new(),
+            radios: radios::Radios::spawn(),
+            controls_at: Instant::now() - Duration::from_secs(5),
+            mic_muted: None,
+            speakers_muted: None,
             task_input: String::new(),
             tasks_scroll: 0,
             reminders: reminders::Reminders::load(),
@@ -339,6 +351,14 @@ impl Notch {
             until: Instant::now() + Duration::from_millis(1600),
             level: Some(if muted { 0.0 } else { level }),
         });
+    }
+
+    fn set_minimal(&mut self, on: bool) {
+        self.settings.minimal = on;
+        self.settings.save();
+        if let Some(item) = &self.tray.minimal {
+            item.set_checked(on);
+        }
     }
 
     fn set_awake(&mut self, on: bool) {
@@ -511,8 +531,8 @@ impl Notch {
                 let on = self.tray.awake.as_ref().is_some_and(|i| i.is_checked());
                 self.set_awake(on);
             } else if let Some(item) = self.tray.minimal.as_ref().filter(|i| i.id() == &ev.id) {
-                self.settings.minimal = item.is_checked();
-                self.settings.save();
+                let on = item.is_checked();
+                self.set_minimal(on);
             } else if Some(&ev.id) == self.tray.settings.as_ref() {
                 self.tab = Tab::Settings;
                 self.force_open_until = Instant::now() + Duration::from_secs(6);
@@ -936,6 +956,9 @@ impl eframe::App for Notch {
             (self.apps, self.startups, self.apps_scroll, self.timer_edit) = (None, None, 0, None);
             if self.tab == Tab::Settings {
                 self.settings.autostart = settings::autostart_enabled();
+            }
+            if self.tab != Tab::Controls {
+                self.radios.unwatch();
             }
         }
         let tab_px = tab_off(MAIN_TABS.iter().position(|t| *t == self.tab).unwrap_or(0));
