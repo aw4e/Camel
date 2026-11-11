@@ -4,7 +4,10 @@ use crate::lyrics::{self, Lyrics};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::{Duration, Instant};
-use windows::Media::Control::{GlobalSystemMediaTransportControlsSessionManager as Manager, GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status};
+use windows::Media::Control::{
+    GlobalSystemMediaTransportControlsSession as Session, GlobalSystemMediaTransportControlsSessionManager as Manager,
+    GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
+};
 use windows::Storage::Streams::DataReader;
 use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize};
 
@@ -22,6 +25,9 @@ pub struct State {
     /// seconds; dur == 0 means the player reports no timeline
     pub pos: f64,
     pub dur: f64,
+    /// How many players Windows lists, and the name of the one shown.
+    pub players: usize,
+    pub source: String,
     /// When `pos` was read; the worker only polls twice a second.
     pub at: Option<Instant>,
     pub lyrics: Option<Arc<Lyrics>>,
@@ -49,6 +55,8 @@ pub enum Cmd {
     Toggle,
     Next,
     Seek(f64),
+    /// Show the next player when several are open.
+    NextPlayer,
 }
 
 pub struct Handle {
@@ -76,6 +84,7 @@ pub fn spawn(lyrics_enabled: bool) -> Handle {
     std::thread::spawn(move || {
         unsafe { RoInitialize(RO_INIT_MULTITHREADED).ok() };
         let mut mgr = None;
+        let mut preferred = None;
         loop {
             // A command wakes the worker at once; otherwise poll twice a second.
             let mut cmds = Vec::new();
@@ -88,7 +97,7 @@ pub fn spawn(lyrics_enabled: bool) -> Handle {
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
             }
             // errors (no session, manager gone) just mean "nothing playing"; drop the manager and retry
-            if tick(&mut mgr, &shared, cmds, &worker_lyr).is_err() {
+            if tick(&mut mgr, &shared, cmds, &worker_lyr, &mut preferred).is_err() {
                 mgr = None;
             }
         }
@@ -96,12 +105,13 @@ pub fn spawn(lyrics_enabled: bool) -> Handle {
     Handle { state, tx, lyrics: lyr }
 }
 
-fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &Arc<LyricsCtx>) -> windows::core::Result<()> {
+fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &Arc<LyricsCtx>, preferred: &mut Option<String>) -> windows::core::Result<()> {
     let mgr = match mgr {
         Some(m) => m,
         None => mgr.insert(Manager::RequestAsync()?.join()?),
     };
-    let Ok(session) = mgr.GetCurrentSession() else {
+    let switch = cmds.iter().any(|c| matches!(c, Cmd::NextPlayer));
+    let Some((session, players, source)) = pick_session(mgr, preferred, switch) else {
         *shared.lock().unwrap_or_else(PoisonError::into_inner) = State::default();
         return Ok(());
     };
@@ -112,6 +122,7 @@ fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &
             Cmd::Prev => session.TrySkipPreviousAsync()?.join()?,
             Cmd::Toggle => session.TryTogglePlayPauseAsync()?.join()?,
             Cmd::Next => session.TrySkipNextAsync()?.join()?,
+            Cmd::NextPlayer => false,
             Cmd::Seek(secs) => {
                 seek_to = Some(secs);
                 // a player without a timeline may refuse; the estimate below still follows the request
@@ -137,8 +148,38 @@ fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &
         _ => (seek_to.unwrap_or(if same_track { estimate } else { 0.0 }), 0.0),
     };
     let lyrics = lyrics_for(lyr, &artist, &title, dur);
-    *shared.lock().unwrap_or_else(PoisonError::into_inner) = State { title, artist, playing, art, pos, dur, at: Some(Instant::now()), lyrics };
+    *shared.lock().unwrap_or_else(PoisonError::into_inner) = State { title, artist, playing, art, pos, dur, players, source, at: Some(Instant::now()), lyrics };
     Ok(())
+}
+
+fn session_id(s: &Session) -> String {
+    s.SourceAppUserModelId().map(|h| h.to_string()).unwrap_or_default()
+}
+
+/// The player to show: the one the user switched to while it is still open, otherwise the one Windows calls current.
+/// Returns it with the number of open players and its display name.
+fn pick_session(mgr: &Manager, preferred: &mut Option<String>, switch: bool) -> Option<(Session, usize, String)> {
+    let sessions: Vec<Session> = mgr.GetSessions().ok()?.into_iter().collect();
+    let mut ids: Vec<String> = sessions.iter().map(session_id).collect();
+    ids.sort();
+    let mut shown = preferred.clone().filter(|p| ids.contains(p)).or_else(|| mgr.GetCurrentSession().ok().map(|s| session_id(&s)))?;
+    if switch && ids.len() > 1 {
+        let at = ids.iter().position(|i| *i == shown).unwrap_or(0);
+        shown = ids[(at + 1) % ids.len()].clone();
+        *preferred = Some(shown.clone());
+    }
+    let session = sessions.into_iter().find(|s| session_id(s) == shown)?;
+    Some((session, ids.len(), app_name(&shown)))
+}
+
+/// A readable name for an app id: "Spotify.exe" is "Spotify", a Store id keeps its last part, and the hashed id of a
+/// browser is just "Browser".
+pub fn app_name(id: &str) -> String {
+    let id = id.rsplit('!').next().unwrap_or(id);
+    let id = id.rsplit(['\\', '/']).next().unwrap_or(id);
+    let id = id.strip_suffix(".exe").unwrap_or(id);
+    let id = if id.contains('.') { id.rsplit('.').next().unwrap_or(id) } else { id };
+    if id.is_empty() || (id.len() >= 12 && id.chars().all(|c| c.is_ascii_hexdigit())) { "Browser".to_owned() } else { id.to_owned() }
 }
 
 fn fetch_art(props: &windows::Media::Control::GlobalSystemMediaTransportControlsSessionMediaProperties) -> Result<Art, Box<dyn std::error::Error>> {
@@ -205,6 +246,15 @@ fn lyrics_for(lyr: &Arc<LyricsCtx>, artist: &str, title: &str, dur: f64) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn app_names_are_readable() {
+        assert_eq!(app_name("Spotify.exe"), "Spotify");
+        assert_eq!(app_name("Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic"), "ZuneMusic");
+        assert_eq!(app_name("chrome.exe"), "chrome");
+        assert_eq!(app_name("F0DC299D809B9700"), "Browser");
+        assert_eq!(app_name(""), "Browser");
+    }
 
     #[test]
     fn position_keeps_moving_only_while_playing_and_stops_at_the_end() {

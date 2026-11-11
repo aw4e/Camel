@@ -4,10 +4,13 @@ pub(crate) const PILL_W: f32 = 196.0;
 pub(crate) const PILL_H: f32 = 34.0;
 pub(crate) const OPEN_W: f32 = 460.0;
 pub(crate) const OPEN_H: f32 = 136.0;
-/// Settings lists five switches per column, one row (21 px) more than the other pages.
-pub(crate) const SETTINGS_H: f32 = OPEN_H + 21.0;
+/// Settings lists six switches per column, two rows (21 px each) more than the other pages.
+pub(crate) const SETTINGS_H: f32 = OPEN_H + 42.0;
 /// Transparent margin each side of the body, room for the flared top corners.
 pub(crate) const EAR: f32 = 19.0;
+/// The closed notch in minimal mode: a thin line in a taller, transparent window so it is easy to hover.
+pub(crate) const MINIMAL: Vec2 = vec2(72.0, 5.0);
+pub(crate) const MINIMAL_WIN_H: f32 = 14.0;
 pub(crate) const TOAST: Vec2 = vec2(300.0, 44.0);
 // Outer margins sit on a 4 px grid. Proportions use the golden ratio, and inner gaps come from the Fibonacci scale
 // (3, 5, 8, 13, 21, 34), whose neighbouring steps keep that ratio, so nested paddings never look arbitrary.
@@ -88,7 +91,7 @@ mod tests {
         assert!(room(list(APPS_TOP), OPEN_H) >= GAP_S, "apps");
         assert!(room(list(APPS_TOP + ROW_PITCH) - ROW_PITCH, OPEN_H) >= GAP_S, "apps with the leftovers banner");
         assert!(room(TOP + 90.0, OPEN_H) >= GAP_S, "shelf");
-        assert!(room(45.0 + 5.0 * 21.0, SETTINGS_H) >= GAP_S, "settings, five rows");
+        assert!(room(45.0 + 6.0 * 21.0, SETTINGS_H) >= GAP_S, "settings, six rows");
         assert!(room(TOP + 75.0 + 18.0, OPEN_H) >= GAP_S, "media controls");
         assert!(room(TOP + 38.0 + 2.0 * ROW_PITCH + 7.0, OPEN_H) >= GAP_S, "mixer");
         let month = |rows: f32| CAL_TOP + (rows - 1.0) * CAL_ROW_H + CAL_DISC;

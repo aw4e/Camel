@@ -14,6 +14,9 @@ impl Notch {
     }
 
     pub(crate) fn draw_compact(&self, ui: &mut egui::Ui, rect: Rect, m: &media::State, a: f32) {
+        if self.settings.minimal {
+            return;
+        }
         let p = ui.painter().clone();
         let half = (PILL_W + if self.dots_active() { 30.0 } else { 0.0 }) / 2.0;
         let c = rect.center();
@@ -28,15 +31,41 @@ impl Notch {
         let time = ui.input(|i| i.time) as f32;
         ui::equalizer(&p, pos2(c.x + half - 23.0, c.y), 4, m.playing, time, fade(self.accent(), a), 15.0);
 
-        if self.focus.running() && !self.dots_active() {
-            let left = self.focus.remaining(Instant::now()).as_secs_f32().ceil() as u64;
-            p.text(c, Align2::CENTER_CENTER, format!("{:02}:{:02}", left / 60, left % 60), bold(12.0), fade(ORANGE, a));
-        } else if !self.dots_active() {
-            p.text(c, Align2::CENTER_CENTER, Local::now().format("%H:%M").to_string(), bold(12.0), fade(Color32::WHITE, a * 0.9));
-        }
-        if self.awake && !self.dots_active() {
-            let sun = pos2(c.x - 30.0, c.y);
-            ui::scaled(&p, sun, 0.6, || ui::icon_sun(&p, sun, fade(Color32::from_rgb(255, 214, 10), a)));
+        if !self.dots_active() {
+            let running = self.focus.running();
+            let (text, color) = if running {
+                let left = self.focus.remaining(Instant::now()).as_secs_f32().ceil() as u64;
+                (format!("{:02}:{:02}", left / 60, left % 60), ORANGE)
+            } else {
+                (clock_text(&Local::now(), self.h24), Color32::WHITE.gamma_multiply(0.9))
+            };
+            let galley = p.layout_no_wrap(text, bold(12.0), fade(color, a));
+            let half_w = galley.size().x / 2.0;
+            p.galley(pos2(c.x - half_w, c.y - galley.size().y / 2.0), galley, color);
+            if self.awake {
+                let sun = pos2(c.x - half_w - 12.0, c.y);
+                ui::scaled(&p, sun, 0.6, || ui::icon_sun(&p, sun, fade(Color32::from_rgb(255, 214, 10), a)));
+            }
+            // a ring beside the clock: the session while the timer runs, otherwise the battery
+            let ring = if running {
+                Some((self.focus.progress(Instant::now()), ORANGE))
+            } else {
+                self.monitor.stats.battery.map(|b| {
+                    (
+                        f32::from(b) / 100.0,
+                        if self.monitor.stats.charging || b > 20 {
+                            GREEN
+                        } else if b > 15 {
+                            ORANGE
+                        } else {
+                            RED
+                        },
+                    )
+                })
+            };
+            if let Some((frac, col)) = ring {
+                ui::ring(&p, pos2(c.x + half_w + 12.0, c.y), 5.5, frac, fade(col, a), fade(fill(30), a));
+            }
         }
         let s = &self.monitor.stats;
         if self.dots_active() {
@@ -92,6 +121,9 @@ impl Notch {
             ToastIcon::Volume => (BLUE, ui::icon_speaker),
             ToastIcon::Timer => (ORANGE, ui::icon_timer),
             ToastIcon::Apps => (BLUE, ui::icon_app),
+            ToastIcon::Keyboard => (Color32::from_rgb(94, 92, 230), ui::icon_keyboard),
+            ToastIcon::Online => (GREEN, ui::icon_wifi),
+            ToastIcon::Offline => (RED, ui::icon_wifi),
             ToastIcon::Battery => (GREEN, ui::icon_battery),
             ToastIcon::BatteryLow => (RED, ui::icon_battery),
         };
@@ -197,7 +229,7 @@ impl Notch {
             Tab::Clipboard => self.tab_clipboard(ui, o, content),
             Tab::Timer => self.tab_timer(ui, o, content),
             Tab::Apps => self.tab_apps(ui, o, content),
-            Tab::Clock => super::tabs::clock::tab_clock(&p, o, content),
+            Tab::Clock => super::tabs::clock::tab_clock(&p, o, content, self.h24),
             Tab::Mixer => self.tab_mixer(ui, o, content),
             Tab::Settings => self.tab_settings(ui, o, content),
         }

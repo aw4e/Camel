@@ -68,3 +68,23 @@ pub(crate) fn accent(a: &media::Art) -> Color32 {
     let k = 235.0 / r.max(g).max(b).max(1) as f32;
     Color32::from_rgb((r as f32 * k).min(255.0) as u8, (g as f32 * k).min(255.0) as u8, (b as f32 * k).min(255.0) as u8)
 }
+
+/// "14:05", or "2:05 PM" on a 12-hour clock.
+pub(crate) fn clock_text(now: &chrono::DateTime<chrono::Local>, h24: bool) -> String {
+    now.format(if h24 { "%H:%M" } else { "%-I:%M %p" }).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    #[test]
+    fn the_clock_follows_the_hour_format() {
+        let t = chrono::Local.with_ymd_and_hms(2026, 11, 11, 14, 5, 9).unwrap();
+        assert_eq!(clock_text(&t, true), "14:05");
+        assert_eq!(clock_text(&t, false), "2:05 PM");
+        let midnight = chrono::Local.with_ymd_and_hms(2026, 11, 11, 0, 7, 0).unwrap();
+        assert_eq!(clock_text(&midnight, false), "12:07 AM");
+    }
+}

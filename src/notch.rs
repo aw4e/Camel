@@ -2,10 +2,10 @@ mod draw;
 mod spotlight_view;
 mod tabs;
 
-use crate::platform::{self, HOTKEY_PRESSED};
+use crate::platform::{self, HOTKEY_PRESSED, Tray};
 use crate::prelude::*;
 use crate::settings::{self, Settings};
-use crate::{actions, apps, clipboard, focus, media, mixer, monitor, notes, spotlight, update};
+use crate::{actions, apps, clipboard, focus, media, mixer, monitor, notes, spotlight, system, update};
 use chrono::Local;
 use global_hotkey::GlobalHotKeyManager;
 use global_hotkey::hotkey::HotKey;
@@ -13,8 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tabs::clock::month_rows;
-use tray_icon::TrayIcon;
-use tray_icon::menu::{CheckMenuItem, MenuEvent, MenuId};
+use tray_icon::menu::MenuEvent;
 
 fn tab_icon(t: Tab) -> fn(&egui::Painter, egui::Pos2, Color32) {
     match t {
@@ -73,6 +72,9 @@ enum ToastIcon {
     Apps,
     Battery,
     BatteryLow,
+    Keyboard,
+    Online,
+    Offline,
 }
 
 struct Toast {
@@ -105,6 +107,10 @@ impl Spring {
             self.x = target;
             self.v = 0.0;
         }
+    }
+
+    fn snap(&mut self, target: f32) {
+        (self.x, self.v) = (target, 0.0);
     }
 
     fn settled(&self, target: f32) -> bool {
@@ -177,10 +183,16 @@ pub(crate) struct Notch {
     spot: Spot,
     index: spotlight::Index,
     hotkey: Option<(GlobalHotKeyManager, HotKey)>,
-    _tray: Option<TrayIcon>,
-    tray_settings: Option<MenuId>,
-    tray_quit: Option<MenuId>,
-    tray_awake: Option<CheckMenuItem>,
+    tray: Tray,
+    /// 24-hour clock and the Windows animation setting, read from Windows every few seconds.
+    h24: bool,
+    reduce_motion: bool,
+    sys_at: Instant,
+    caps: Option<bool>,
+    lang: Option<String>,
+    net: Option<system::Network>,
+    online: Option<bool>,
+    output: Option<String>,
     /// Keep awake: no screen timeout, no sleep.
     awake: bool,
     master: Option<mixer::Master>,
@@ -198,6 +210,8 @@ pub(crate) struct Notch {
     lyric_offset: f64,
     lyric_track: String,
     updater: update::Updater,
+    /// The player shown last, to say so when it changes.
+    source: String,
     launched: Instant,
     update_at: Option<Instant>,
     /// A check the user asked for, so its outcome is reported even when nothing is new.
@@ -209,7 +223,7 @@ impl Notch {
     pub(crate) fn new(ctx: &egui::Context) -> Self {
         let settings = Settings::load();
         let record = apps::load_record();
-        let (tray, tray_settings, tray_quit, tray_awake) = platform::make_tray();
+        let tray = platform::make_tray(settings.minimal);
         let hotkey = platform::register_hotkey(ctx, settings.spotlight);
         Self {
             media: media::spawn(settings.lyrics),
@@ -260,10 +274,15 @@ impl Notch {
             spot: Spot::default(),
             index: spotlight::build_index(),
             hotkey,
-            _tray: tray,
-            tray_settings,
-            tray_quit,
-            tray_awake,
+            tray,
+            h24: system::use_24h(),
+            reduce_motion: system::reduced_motion(),
+            sys_at: Instant::now(),
+            caps: None,
+            lang: None,
+            net: None,
+            online: None,
+            output: None,
             awake: false,
             master: None,
             master_at: Instant::now(),
@@ -277,6 +296,7 @@ impl Notch {
             lyric_offset: 0.0,
             lyric_track: String::new(),
             updater: update::Updater::new(),
+            source: String::new(),
             launched: Instant::now(),
             update_at: None,
             update_asked: false,
@@ -311,7 +331,7 @@ impl Notch {
     fn set_awake(&mut self, on: bool) {
         self.awake = on;
         monitor::set_awake(on);
-        if let Some(item) = &self.tray_awake {
+        if let Some(item) = &self.tray.awake {
             item.set_checked(on);
         }
         self.show_toast(ToastIcon::Awake, if on { "Keeping this PC awake" } else { "Sleep is allowed again" }, "Screen and sleep timers".to_owned());
@@ -454,12 +474,15 @@ impl Notch {
 
     fn poll_tray(&mut self, ctx: &egui::Context) {
         while let Ok(ev) = MenuEvent::receiver().try_recv() {
-            if Some(&ev.id) == self.tray_quit.as_ref() {
+            if Some(&ev.id) == self.tray.quit.as_ref() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            } else if self.tray_awake.as_ref().is_some_and(|i| i.id() == &ev.id) {
-                let on = self.tray_awake.as_ref().is_some_and(|i| i.is_checked());
+            } else if self.tray.awake.as_ref().is_some_and(|i| i.id() == &ev.id) {
+                let on = self.tray.awake.as_ref().is_some_and(|i| i.is_checked());
                 self.set_awake(on);
-            } else if Some(&ev.id) == self.tray_settings.as_ref() {
+            } else if let Some(item) = self.tray.minimal.as_ref().filter(|i| i.id() == &ev.id) {
+                self.settings.minimal = item.is_checked();
+                self.settings.save();
+            } else if Some(&ev.id) == self.tray.settings.as_ref() {
                 self.tab = Tab::Settings;
                 self.force_open_until = Instant::now() + Duration::from_secs(6);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
@@ -536,6 +559,54 @@ impl Notch {
         self.save_record();
         self.apps = None;
         self.show_toast(ToastIcon::Apps, &format!("{} removed", shorten(&app.name, 22)), body);
+    }
+
+    /// Windows settings every few seconds; the keyboard every tick, because a Caps Lock toast has to feel immediate.
+    fn poll_system(&mut self) {
+        if self.sys_at.elapsed() > Duration::from_secs(5) {
+            self.sys_at = Instant::now();
+            self.h24 = system::use_24h();
+            self.reduce_motion = system::reduced_motion();
+            if self.settings.device_toasts {
+                self.poll_devices();
+            }
+        }
+        if self.settings.key_toasts {
+            self.poll_keys();
+        }
+    }
+
+    fn poll_keys(&mut self) {
+        let caps = system::caps_lock();
+        if self.caps.is_some_and(|c| c != caps) {
+            self.show_toast(ToastIcon::Keyboard, if caps { "Caps Lock on" } else { "Caps Lock off" }, "Keyboard".to_owned());
+        }
+        self.caps = Some(caps);
+        if let Some(lang) = system::keyboard_language() {
+            if self.lang.as_ref().is_some_and(|prev| *prev != lang) {
+                self.show_toast(ToastIcon::Keyboard, "Keyboard language", lang.clone());
+            }
+            self.lang = Some(lang);
+        }
+    }
+
+    fn poll_devices(&mut self) {
+        if self.net.is_none() {
+            self.net = system::Network::new();
+        }
+        if let Some(online) = self.net.as_ref().and_then(|n| n.online()) {
+            if self.online.is_some_and(|prev| prev != online) {
+                let (icon, title) = if online { (ToastIcon::Online, "Back online") } else { (ToastIcon::Offline, "Connection lost") };
+                self.show_toast(icon, title, "Internet".to_owned());
+            }
+            self.online = Some(online);
+        }
+        if let Some((id, name)) = system::audio_output() {
+            if self.output.as_ref().is_some_and(|prev| *prev != id) {
+                self.show_toast(ToastIcon::Volume, "Audio output", shorten(&name, 36));
+            }
+            self.output = Some(id);
+        }
     }
 
     fn poll_focus(&mut self) {
@@ -627,12 +698,18 @@ impl Notch {
                 },
             ),
             Mode::Toast => TOAST,
+            Mode::Compact if self.settings.minimal => MINIMAL,
             Mode::Compact => vec2(PILL_W + if self.dots_active() { 30.0 } else { 0.0 }, PILL_H),
         };
         self.w.step(target.x, dt);
         self.h.step(target.y, dt);
+        if self.reduce_motion {
+            self.w.snap(target.x);
+            self.h.snap(target.y);
+        }
         let shape_moving = !self.w.settled(target.x) || !self.h.settled(target.y);
-        let want = vec2((target.x + 2.0 * EAR).round(), target.y.round());
+        let win_h = if mode == Mode::Compact && self.settings.minimal { MINIMAL_WIN_H } else { target.y };
+        let want = vec2((target.x + 2.0 * EAR).round(), win_h.round());
         let win = if shape_moving { self.win.max(want) } else { want };
         // Spotlight floats at 22% of the screen height like macOS; everything else hangs from the top edge.
         let monitor = ctx.input(|i| i.viewport().monitor_size);
@@ -696,6 +773,16 @@ impl Notch {
         }
     }
 
+    /// Says which app the media page now follows when it changes, for example after a click on the album art.
+    fn note_player(&mut self, source: &str) {
+        if source != self.source {
+            if !self.source.is_empty() && !source.is_empty() {
+                self.show_toast(ToastIcon::Volume, "Now playing from", source.to_owned());
+            }
+            self.source = source.to_owned();
+        }
+    }
+
     fn mode_alpha(&self) -> f32 {
         ((self.mode_at.elapsed().as_secs_f32() - 0.06) / 0.15).clamp(0.0, 1.0)
     }
@@ -717,6 +804,7 @@ impl eframe::App for Notch {
         self.poll_uninstall();
         self.poll_focus();
         self.poll_battery();
+        self.poll_system();
         self.poll_update(ctx);
     }
 
@@ -727,6 +815,7 @@ impl eframe::App for Notch {
         self.last_frame = now;
         let m = self.media.state();
         self.sync_art(&ctx, &m.art);
+        self.note_player(&m.source);
         if self.toast.as_ref().is_some_and(|t| t.until < now) {
             self.toast = None;
         }
@@ -742,7 +831,8 @@ impl eframe::App for Notch {
             )
         });
         // the window can be larger than the shape mid-transition; transparent margins do not count as hover
-        let hover = hover.filter(|p| self.shape.expand2(vec2(EAR, 2.0)).contains(*p));
+        let slack = if self.settings.minimal && self.mode == Mode::Compact { MINIMAL_WIN_H } else { 2.0 };
+        let hover = hover.filter(|p| self.shape.expand2(vec2(EAR, slack)).contains(*p));
         if hover.is_some() {
             self.last_hover = now;
         }
@@ -801,6 +891,9 @@ impl eframe::App for Notch {
         }
         let tab_px = tab_off(MAIN_TABS.iter().position(|t| *t == self.tab).unwrap_or(0));
         self.pill.step(tab_px, dt);
+        if self.reduce_motion {
+            self.pill.snap(tab_px);
+        }
         let fading = self.tab_at.elapsed() < Duration::from_millis(200);
         let moving = shape_moving || !self.pill.settled(tab_px) || fading;
         // 30 fps is plenty for the equalizer and progress bar; full rate only while something springs
@@ -838,7 +931,7 @@ impl eframe::App for Notch {
             } else {
                 // the corner radii grow with the body: top 6 -> 19, bottom 14 -> 24
                 let k = ((h - PILL_H) / 120.0).clamp(0.0, 1.0);
-                ui::notch_shape(ui.painter(), body, 6.0 + 13.0 * k, 14.0 + 10.0 * k);
+                ui::notch_shape(ui.painter(), body, (6.0 + 13.0 * k).min(h), (14.0 + 10.0 * k).min(h));
             }
             ui.set_clip_rect(body.intersect(ui.clip_rect()));
 

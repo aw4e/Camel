@@ -14,6 +14,9 @@ pub struct Settings {
     pub autostart: bool,
     pub volume_hud: bool,
     pub auto_update: bool,
+    pub key_toasts: bool,
+    pub device_toasts: bool,
+    pub minimal: bool,
 }
 
 impl Default for Settings {
@@ -29,6 +32,9 @@ impl Default for Settings {
             autostart: false,
             volume_hud: true,
             auto_update: true,
+            key_toasts: true,
+            device_toasts: true,
+            minimal: false,
         }
     }
 }

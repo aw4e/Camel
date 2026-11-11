@@ -25,6 +25,12 @@ impl Notch {
         if self.art_tex.is_some() {
             p.rect_stroke(art, 11.0, Stroke::new(1.0, fade(fill(28), a)), StrokeKind::Inside);
         }
+        if m.players > 1 {
+            let tip = format!("Playing from {}. Click to switch player.", m.source);
+            if hit(ui, "art", art).on_hover_text(tip).clicked() {
+                self.media.send(media::Cmd::NextPlayer);
+            }
+        }
 
         let x0 = o.x + MARGIN + 72.0 + GAP_L;
         let x1 = o.x + OPEN_W - MARGIN;

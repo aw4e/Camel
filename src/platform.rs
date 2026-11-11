@@ -33,23 +33,32 @@ pub(crate) fn register_hotkey(ctx: &egui::Context, enabled: bool) -> Option<(Glo
     Some((mgr, hk))
 }
 
-pub(crate) fn make_tray() -> (Option<TrayIcon>, Option<MenuId>, Option<MenuId>, Option<CheckMenuItem>) {
+pub(crate) struct Tray {
+    _icon: Option<TrayIcon>,
+    pub(crate) settings: Option<MenuId>,
+    pub(crate) quit: Option<MenuId>,
+    pub(crate) awake: Option<CheckMenuItem>,
+    pub(crate) minimal: Option<CheckMenuItem>,
+}
+
+pub(crate) fn make_tray(minimal: bool) -> Tray {
     // brand mark, 32 px small cut (transparent: reads on light and dark taskbars)
     let icon = image::load_from_memory(include_bytes!("../assets/brand/symbol-32.png"))
         .ok()
         .and_then(|i| tray_icon::Icon::from_rgba(i.to_rgba8().into_raw(), 32, 32).ok());
     let menu = Menu::new();
     let awake = CheckMenuItem::new("Keep awake", true, false, None);
+    let minimal = CheckMenuItem::new("Minimal notch", true, minimal, None);
     let settings = MenuItem::new("Settings", true, None);
     let quit = MenuItem::new("Quit", true, None);
-    if menu.append_items(&[&awake, &settings, &quit]).is_err() {
-        return (None, None, None, None);
+    if menu.append_items(&[&awake, &minimal, &settings, &quit]).is_err() {
+        return Tray { _icon: None, settings: None, quit: None, awake: None, minimal: None };
     }
     let mut b = TrayIconBuilder::new().with_menu(Box::new(menu)).with_tooltip("Camel");
     if let Some(icon) = icon {
         b = b.with_icon(icon);
     }
-    (b.build().ok(), Some(settings.id().clone()), Some(quit.id().clone()), Some(awake))
+    Tray { _icon: b.build().ok(), settings: Some(settings.id().clone()), quit: Some(quit.id().clone()), awake: Some(awake), minimal: Some(minimal) }
 }
 
 /// SF Pro is not redistributable, so it is read from a `fonts/` folder (next to the exe, two levels up for

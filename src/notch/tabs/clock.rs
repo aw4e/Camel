@@ -15,11 +15,13 @@ pub(crate) fn month_rows(d: NaiveDate) -> u32 {
     (lead + days).div_ceil(7)
 }
 
-pub(crate) fn tab_clock(p: &egui::Painter, o: egui::Pos2, a: f32) {
+pub(crate) fn tab_clock(p: &egui::Painter, o: egui::Pos2, a: f32, h24: bool) {
     let now = Local::now();
     // seconds sit after the measured width of the time, on the same baseline
-    let time = p.layout_no_wrap(now.format("%H:%M").to_string(), font(44.0), fade(Color32::WHITE, a));
-    let secs = p.layout_no_wrap(format!("{:02}", now.second()), font(16.0), fade(GRAY, a));
+    let digits = if h24 { now.format("%H:%M") } else { now.format("%-I:%M") }.to_string();
+    let time = p.layout_no_wrap(digits, font(44.0), fade(Color32::WHITE, a));
+    let suffix = if h24 { String::new() } else { now.format(" %p").to_string() };
+    let secs = p.layout_no_wrap(format!("{:02}{suffix}", now.second()), font(16.0), fade(GRAY, a));
     let origin = o + vec2(MARGIN, TOP - 1.0);
     let secs_at = pos2(origin.x + time.size().x + 5.0, origin.y + baseline(&time) - baseline(&secs));
     p.galley(secs_at, secs, Color32::WHITE);

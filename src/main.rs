@@ -15,6 +15,7 @@ mod platform;
 mod prelude;
 mod settings;
 mod spotlight;
+mod system;
 mod ui;
 mod update;
 mod widgets;

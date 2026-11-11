@@ -267,6 +267,22 @@ pub fn icon_lyrics(p: &Painter, c: Pos2, col: Color32) {
     seg(p, c, (-3.8, 0.6), (1.0, 0.6), W, col);
 }
 
+pub fn icon_keyboard(p: &Painter, c: Pos2, col: Color32) {
+    path(p, c, &[(-8.0, -4.5), (8.0, -4.5), (8.0, 5.0), (-8.0, 5.0)], 2.5, true, W, col);
+    for x in [-4.5, -1.5, 1.5, 4.5] {
+        p.circle_filled(at(c, (x, -1.2)), 0.9, col);
+    }
+    seg(p, c, (-3.5, 2.2), (3.5, 2.2), W, col);
+}
+
+pub fn icon_wifi(p: &Painter, c: Pos2, col: Color32) {
+    let (a0, a1) = (-std::f32::consts::PI * 0.75, -std::f32::consts::PI * 0.25);
+    for r in [4.5, 8.0, 11.5] {
+        arc(p, c, (0.0, 5.5), r, a0, a1, col);
+    }
+    p.circle_filled(at(c, (0.0, 5.5)), 1.3, col);
+}
+
 pub fn icon_search(p: &Painter, c: Pos2, col: Color32) {
     p.circle_stroke(c + vec2(-1.5, -1.5), 6.0, Stroke::new(1.8, col));
     seg(p, c, (2.9, 2.9), (7.8, 7.8), 1.9, col);
@@ -421,4 +437,21 @@ pub fn glow(p: &Painter, c: Pos2, r: f32, col: Color32) {
         m.add_triangle(0, i, i + 1);
     }
     p.add(Shape::mesh(m));
+}
+
+/// A thin progress ring: a faint track with `frac` of it drawn from the top, clockwise.
+pub fn ring(p: &Painter, c: Pos2, r: f32, frac: f32, col: Color32, track: Color32) {
+    p.circle_stroke(c, r, Stroke::new(2.0, track));
+    let frac = frac.clamp(0.0, 1.0);
+    let n = (frac * 40.0).ceil() as usize;
+    if n == 0 {
+        return;
+    }
+    let pts: Vec<Pos2> = (0..=n)
+        .map(|i| {
+            let a = -std::f32::consts::FRAC_PI_2 + std::f32::consts::TAU * frac * i as f32 / n as f32;
+            c + vec2(a.cos(), a.sin()) * r
+        })
+        .collect();
+    p.add(Shape::line(pts, Stroke::new(2.0, col)));
 }

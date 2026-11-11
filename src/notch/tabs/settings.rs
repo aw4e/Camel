@@ -5,7 +5,7 @@ impl Notch {
     pub(crate) fn tab_settings(&mut self, ui: &mut egui::Ui, o: egui::Pos2, a: f32) {
         let before = self.settings.clone();
         let s = &mut self.settings;
-        let groups: [(&str, [(&str, &mut bool); 5]); 2] = [
+        let groups: [(&str, [(&str, &mut bool); 6]); 2] = [
             (
                 "GENERAL",
                 [
@@ -14,6 +14,7 @@ impl Notch {
                     ("Always on top", &mut s.always_on_top),
                     ("Hide on fullscreen", &mut s.hide_fullscreen),
                     ("Check for updates", &mut s.auto_update),
+                    ("Caps Lock and language", &mut s.key_toasts),
                 ],
             ),
             (
@@ -23,6 +24,7 @@ impl Notch {
                     ("Clipboard history", &mut s.clipboard_toast),
                     ("Privacy indicators", &mut s.privacy_dots),
                     ("Volume HUD", &mut s.volume_hud),
+                    ("Network and audio alerts", &mut s.device_toasts),
                     ("Spotlight (Alt+Space)", &mut s.spotlight),
                 ],
             ),
@@ -32,7 +34,7 @@ impl Notch {
         for (col, (title, items)) in groups.into_iter().enumerate() {
             let left = o.x + MARGIN + col as f32 * (gw + GAP);
             ui.painter().text(pos2(left + 4.0, o.y + 36.0), Align2::LEFT_CENTER, title, bold(9.5), fade(DIM, a));
-            let group = Rect::from_min_size(pos2(left, o.y + 45.0), vec2(gw, ROW * 5.0));
+            let group = Rect::from_min_size(pos2(left, o.y + 45.0), vec2(gw, ROW * 6.0));
             ui.painter().rect_filled(group, 9.0, fade(fill(15), a));
             for (row, (label, value)) in items.into_iter().enumerate() {
                 let y = group.top() + (row as f32 + 0.5) * ROW;
