@@ -293,6 +293,7 @@ mod tests {
             ("The Weeknd - Topic", "Blinding Lights", 200.0),
             ("Coldplay", "Coldplay - Yellow (Official Video)", 0.0),
             ("Adele", "Hello", 295.0),
+            ("Sal Priadi", "Sal Priadi - Ada titik-titik di ujung doa (Official Music Video)", 0.0),
         ];
         for (artist, title, dur) in cases {
             let found = fetch(artist, title, dur);

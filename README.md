@@ -97,8 +97,8 @@ Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by defau
 **Lyrics.** When lyrics are found, a lyrics button appears at the right of the media page. It swaps the player for a
 scrolling view: the current line is large and white, the lines around it fade out, and clicking a line jumps there. Names
 that YouTube reports (`Artist - Song (Official Video)`, `Artist - Topic`, `ArtistVEVO`) are cleaned and
-searched several ways, and a result is only used when its title and length match. Players that report no timeline (some
-browser tabs) show no lyrics, because there is no position to follow.
+searched several ways, and a result is only used when its title and length match. A player that reports no timeline (some
+browsers) gets an estimated position, counted from the start of the track: click the line you hear to sync it.
 
 **Clipboard history.** Hover a row to pin it (up to four): a pinned item stays on top and survives new copies and Clear.
 A picture shows a thumbnail, its size and how much memory it takes. Pictures are kept as compressed PNG, 24 MB at most in
@@ -273,8 +273,9 @@ The Settings screen is the densest, so its two groups are the one place where ro
   listed.
 - Spotlight indexes up to 60,000 files, and the index lives in memory only.
 - Mic and camera dots read the Windows privacy consent store, so they follow what Windows itself reports.
-- Lyrics depend on the position the player reports, which some players report late, and some browser tabs report none at
-  all. Lyrics that are out of sync are tracked in [#2](https://github.com/aw4e/Camel/issues/2).
+- Lyrics follow the position the player reports. Some browsers report none at all; Camel then counts the time itself from
+  the start of the track, and you click the line you hear to correct it (the seek bar is hidden in that case). Lyrics that
+  are out of sync are tracked in [#2](https://github.com/aw4e/Camel/issues/2).
 
 ## Contributing
 

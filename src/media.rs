@@ -31,7 +31,8 @@ impl State {
     /// Where the track is now: the last reading plus the time since, while it plays.
     pub fn position(&self) -> f64 {
         match (self.playing, self.at) {
-            (true, Some(at)) => (self.pos + at.elapsed().as_secs_f64()).min(self.dur),
+            (true, Some(at)) if self.dur > 0.0 => (self.pos + at.elapsed().as_secs_f64()).min(self.dur),
+            (true, Some(at)) => self.pos + at.elapsed().as_secs_f64(),
             _ => self.pos,
         }
     }
@@ -105,12 +106,17 @@ fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &
         return Ok(());
     };
 
+    let mut seek_to = None;
     for c in cmds {
         match c {
             Cmd::Prev => session.TrySkipPreviousAsync()?.join()?,
             Cmd::Toggle => session.TryTogglePlayPauseAsync()?.join()?,
             Cmd::Next => session.TrySkipNextAsync()?.join()?,
-            Cmd::Seek(secs) => session.TryChangePlaybackPositionAsync((secs * 1e7) as i64)?.join()?,
+            Cmd::Seek(secs) => {
+                seek_to = Some(secs);
+                // a player without a timeline may refuse; the estimate below still follows the request
+                session.TryChangePlaybackPositionAsync((secs * 1e7) as i64).ok().and_then(|a| a.join().ok()).unwrap_or(false)
+            }
         };
     }
 
@@ -121,10 +127,16 @@ fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &
 
     // Only re-fetch art when the track changes; reuse the old Arc otherwise.
     let prev = shared.lock().unwrap_or_else(PoisonError::into_inner).clone();
-    let art = if prev.title == title && prev.artist == artist { prev.art } else { fetch_art(&props).ok().map(Arc::new) };
-    let (pos, dur) = timeline(&session, playing).unwrap_or((0.0, 0.0));
-    // without a timeline there is no position to follow, so the lines would never advance
-    let lyrics = lyrics_for(lyr, &artist, &title, dur).filter(|_| dur > 0.0);
+    let same_track = prev.title == title && prev.artist == artist;
+    let estimate = prev.position();
+    let art = if same_track { prev.art } else { fetch_art(&props).ok().map(Arc::new) };
+    // Some players (browsers, mostly) report no timeline at all. Then the position is counted here: from the start of
+    // the track, or from the last line the user clicked, so lyrics can still follow along.
+    let (pos, dur) = match timeline(&session, playing) {
+        Ok((pos, dur)) if dur > 0.0 => (pos, dur),
+        _ => (seek_to.unwrap_or(if same_track { estimate } else { 0.0 }), 0.0),
+    };
+    let lyrics = lyrics_for(lyr, &artist, &title, dur);
     *shared.lock().unwrap_or_else(PoisonError::into_inner) = State { title, artist, playing, art, pos, dur, at: Some(Instant::now()), lyrics };
     Ok(())
 }
@@ -205,5 +217,8 @@ mod tests {
         std::thread::sleep(Duration::from_millis(50));
         assert_eq!(s.position(), 100.0, "never past the end");
         assert_eq!(State { playing: true, pos: 5.0, ..State::default() }.position(), 5.0, "no reading yet");
+        let unknown_length = State { playing: true, pos: 5.0, dur: 0.0, at: Some(Instant::now()), ..State::default() };
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(unknown_length.position() > 5.0, "a track without a length is counted, not frozen");
     }
 }

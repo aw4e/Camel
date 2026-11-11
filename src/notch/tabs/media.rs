@@ -129,9 +129,14 @@ impl Notch {
             clip.galley(pos2(x0, y - galley.size().y / 2.0), galley, color);
         }
 
+        if dur <= 0.0 {
+            // no timeline from the player: the position is counted here, and a click on a line corrects it
+            p.text(pos2(x0, o.y + TOP + 96.0), Align2::LEFT_CENTER, "No timeline from this player. Click the line you hear to sync.", font(9.5), fade(DIM, a));
+            return;
+        }
         let bar = Rect::from_x_y_ranges(x0..=x1 + 26.0, o.y + TOP + 95.0..=o.y + TOP + 97.0);
         p.rect_filled(bar, 1.0, fade(fill(24), a));
-        let done = if dur > 0.0 { (pos / dur).clamp(0.0, 1.0) as f32 } else { 0.0 };
+        let done = (pos / dur).clamp(0.0, 1.0) as f32;
         p.rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * done, bar.height())), 1.0, fade(Color32::from_gray(235), a));
     }
 }
