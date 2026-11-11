@@ -226,7 +226,7 @@ impl Notch {
         }
 
         if on {
-            let q = Rect::from_center_size(pos2(right - 44.0, o.y + 16.0), vec2(46.0, 18.0));
+            let q = Rect::from_center_size(pos2(right - 66.0, o.y + 16.0), vec2(46.0, 18.0));
             let r = hit(ui, "quit", q);
             p.rect_filled(q, 9.0, fade(RED.gamma_multiply(if r.hovered() { 0.38 } else { 0.24 }), a));
             p.text(q.center(), Align2::CENTER_CENTER, "Quit", bold(11.0), fade(RED, a));
