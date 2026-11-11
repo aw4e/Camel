@@ -163,11 +163,9 @@ impl Notch {
             }
             if let Some(pt) = pointer {
                 let galley = p.layout_no_wrap(shorten(&name, 16), bold(10.5), fade(Color32::WHITE, a));
-                // the name hangs from the hand, which trembles while it holds it, until it is dropped
-                let t = ui.input(|i| i.time) as f32;
-                let shake = if self.reduce_motion { Vec2::ZERO } else { vec2((t * 40.0).sin() * 1.2, (t * 53.0).cos() * 0.9) };
+                // the name hangs from the hand
                 let size = galley.size() + vec2(14.0, 6.0);
-                let hand = pt + shake;
+                let hand = pt;
                 let chip = Rect::from_center_size(pos2(hand.x, (hand.y + 14.0).min(o.y + MIXER_H - size.y / 2.0 - 2.0)), size);
                 p.rect_filled(chip, chip.height() / 2.0, fade(fill(44), a));
                 p.galley(chip.center() - galley.size() / 2.0, galley, Color32::WHITE);
