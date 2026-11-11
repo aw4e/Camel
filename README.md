@@ -137,8 +137,8 @@ breaks and the label shows where you are in the cycle.
 **Mixer.** Apps are placed in a channel by a list of well-known names kept as data in `assets/mixer-apps.json` (Spotify and VLC in
 Music, browsers in Browser, Discord and Teams in Voice, system sounds in System); everything else lands in Game, and a short
 list of helpers is hidden. An app with many audio sessions, such as a browser with helper processes, shows once. The mixer
-follows the default output: when it changes, the mixer is made again for the new one. Click an app's name under a strip to
-move it to the next channel; Camel remembers the choice by app name. A channel's fader sets the volume of every app in it, and
+follows the default output: when it changes, the mixer is made again for the new one. Drag an app's name under a strip onto
+another strip to move it; Camel remembers the choice by app name. A channel's fader sets the volume of every app in it, and
 its mute button mutes them all. It uses the same per-app volume Windows' own volume mixer uses, so levels you set stay when
 Camel closes. It does not create virtual audio devices (that needs a driver), so there is no separate stream mix.
 

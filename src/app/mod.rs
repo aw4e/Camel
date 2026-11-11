@@ -198,6 +198,8 @@ pub(crate) struct Notch {
     art_tex: Option<(Arc<media::Art>, egui::TextureHandle, Color32)>,
     mixer: Option<mixer::Mixer>,
     mixer_at: Instant,
+    /// An app name being dragged to another mixer channel: its key and the name to show.
+    mixer_drag: Option<(String, String)>,
     shelf: Vec<PathBuf>,
     shelf_scroll: usize,
     history: clipboard::History,
@@ -308,6 +310,7 @@ impl Notch {
             art_tex: None,
             mixer: None,
             mixer_at: Instant::now(),
+            mixer_drag: None,
             shelf: Vec::new(),
             shelf_scroll: 0,
             history: clipboard::History::default(),

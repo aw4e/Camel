@@ -36,11 +36,6 @@ pub fn channel_of(app: &str, moved: &HashMap<String, usize>) -> usize {
     moved.get(&app.to_lowercase()).copied().filter(|c| *c < NAMES.len()).unwrap_or_else(|| default_channel(app))
 }
 
-/// The next channel, for the click that moves an app along.
-pub fn next(channel: usize) -> usize {
-    (channel + 1) % NAMES.len()
-}
-
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Strip {
     /// Indexes into the list of apps given to `summarize`.
@@ -165,7 +160,6 @@ Default output: Speakers
         assert_eq!(channel_of("Spotify", &moved), 4);
         assert_eq!(channel_of("odd", &moved), 4, "a channel that does not exist is ignored");
         assert_eq!(channel_of("chrome", &moved), 2);
-        assert_eq!((next(0), next(4)), (1, 0));
     }
 
     #[test]

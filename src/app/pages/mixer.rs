@@ -9,7 +9,7 @@ const FADER: (f32, f32) = (34.0, 100.0);
 
 impl Notch {
     /// A channel mixer in the style of Elgato Wave Link: apps are grouped into channels, a fader per channel sets the
-    /// volume of every app in it, and a click on an app name moves it to the next channel. The last strip is the master.
+    /// volume of every app in it, and an app name can be dragged onto another channel. The last strip is the master.
     pub(crate) fn tab_mixer(&mut self, ui: &mut egui::Ui, o: egui::Pos2, a: f32) {
         // the faders show their dragged value, so everything is only read again when no button is held
         let due = self.mixer_at.elapsed() > Duration::from_millis(400) && !ui.input(|i| i.pointer.any_down());
@@ -41,7 +41,8 @@ impl Notch {
 
         let count = channels::NAMES.len() + 1;
         let w = (OPEN_W - 2.0 * MARGIN - GAP_S * (count as f32 - 1.0)) / count as f32;
-        let (mut set_level, mut set_mute, mut move_app) = (None, None, None);
+        let (mut set_level, mut set_mute, mut move_app, mut start_drag) = (None, None, None, None);
+        let mut cards = Vec::new();
         for i in 0..count {
             let strip = strips.get(i);
             let master = strip.is_none();
@@ -51,6 +52,7 @@ impl Notch {
                 Some(s) => (channels::NAMES[i], s.level, s.muted, s.peak),
                 None => ("Master", mx.master, self.speakers_muted == Some(true), loudest),
             };
+            cards.push(card);
             p.rect_filled(card, 12.0, fade(fill(14), a));
             let cx = card.center().x;
             let dim = if empty { DIM } else { Color32::WHITE };
@@ -90,22 +92,31 @@ impl Notch {
                 set_mute = Some((i, !muted));
             }
 
-            // the apps in the channel; a click moves one along
+            // the apps in the channel; one can be dragged onto another strip
             if let Some(strip) = strip {
                 let apps = channels::one_per_app(&strip.apps, |i| snapshot[i].0.clone());
                 let shown: Vec<usize> = apps.iter().copied().take(2).collect();
                 for (line, app) in shown.iter().enumerate() {
                     let y = card.top() + 130.0 + line as f32 * 10.5;
-                    let label = if line == 1 && apps.len() > 2 { format!("+{} more", apps.len() - 1) } else { shorten(&snapshot[*app].0, 9) };
+                    let (name, key) = (&snapshot[*app].0, snapshot[*app].0.to_lowercase());
+                    let label = if line == 1 && apps.len() > 2 { format!("+{} more", apps.len() - 1) } else { shorten(name, 9) };
                     let row = Rect::from_center_size(pos2(cx, y), vec2(w - 6.0, 10.0));
-                    let r = hit(ui, &format!("app{i}-{line}"), row).on_hover_text(format!(
-                        "{}. Click to move it to {}.",
-                        snapshot[*app].0,
-                        channels::NAMES[channels::next(i)]
-                    ));
-                    p.text(row.center(), Align2::CENTER_CENTER, label, font(9.0), fade(if r.hovered() { Color32::WHITE } else { GRAY }, a));
-                    if r.clicked() {
-                        move_app = Some((snapshot[*app].0.to_lowercase(), channels::next(i)));
+                    let lifted = self.mixer_drag.as_ref().is_some_and(|(k, _)| *k == key);
+                    let cursor = if self.mixer_drag.is_some() { egui::CursorIcon::Grabbing } else { egui::CursorIcon::Grab };
+                    let mut r = ui.interact(row, ui.scope_id().with(format!("app{i}-{line}")), Sense::drag()).on_hover_cursor(cursor);
+                    if self.mixer_drag.is_none() {
+                        r = r.on_hover_text(format!("{name}. Drag it to another channel."));
+                    }
+                    let color = if lifted {
+                        DIM
+                    } else if r.hovered() {
+                        Color32::WHITE
+                    } else {
+                        GRAY
+                    };
+                    p.text(row.center(), Align2::CENTER_CENTER, label, font(9.0), fade(color, a));
+                    if r.drag_started() {
+                        start_drag = Some((key, name.clone()));
                     }
                 }
                 if shown.is_empty() {
@@ -137,6 +148,33 @@ impl Notch {
             } else {
                 for app in &strips[i].apps {
                     mx.set_app_muted(*app, muted);
+                }
+            }
+        }
+        if let Some(drag) = start_drag {
+            self.mixer_drag = Some(drag);
+        }
+        if let Some((key, name)) = self.mixer_drag.clone() {
+            let pointer = ui.input(|i| i.pointer.latest_pos());
+            // the strips are the channels; the master strip takes no apps
+            let target = pointer.and_then(|pt| cards.iter().take(channels::NAMES.len()).position(|c| c.contains(pt)));
+            if let Some(t) = target {
+                p.rect_stroke(cards[t], 12.0, Stroke::new(1.5, fade(BLUE, a)), StrokeKind::Inside);
+            }
+            if let Some(pt) = pointer {
+                let galley = p.layout_no_wrap(shorten(&name, 16), bold(10.5), fade(Color32::WHITE, a));
+                let chip = Rect::from_center_size(pt + vec2(0.0, -14.0), galley.size() + vec2(14.0, 6.0));
+                p.rect_filled(chip, chip.height() / 2.0, fade(fill(44), a));
+                p.galley(chip.center() - galley.size() / 2.0, galley, Color32::WHITE);
+            }
+            if ui.input(|i| i.pointer.any_down()) {
+                ui.ctx().request_repaint();
+            } else {
+                self.mixer_drag = None;
+                if let Some(t) = target
+                    && t != channels::channel_of(&key, &self.settings.channel_overrides)
+                {
+                    move_app = Some((key, t));
                 }
             }
         }
