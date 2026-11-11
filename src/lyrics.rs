@@ -211,7 +211,7 @@ pub fn parse_lrc(src: &str) -> Option<Lyrics> {
             times.push(m * 60.0 + s);
             rest = after;
         }
-        out.extend(times.into_iter().map(|t| (t, rest.trim().to_owned())));
+        out.extend(times.into_iter().map(|t| (t, crate::widgets::clean_text(rest.trim()))));
     }
     out.sort_by(|a, b| a.0.total_cmp(&b.0));
     (!out.is_empty()).then_some(out)

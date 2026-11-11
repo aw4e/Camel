@@ -31,7 +31,7 @@ Spotlight-style launcher.
 - **Small and quiet.** One executable of about 7 MB, written in Rust with [egui](https://github.com/emilk/egui) (glow
   backend). It trims its own memory when idle and hides while a fullscreen game or presentation is running.
 - **Private by default.** Clipboard history stays in memory. The only network requests are lyrics and update checks, and
-  both can be switched off. See [Privacy and security](#privacy-and-security).
+  each can be switched off, and the weather is off until you ask for it. See [Privacy and security](#privacy-and-security).
 - **Open source.** MIT licensed, with tests for the logic and for the layout rules.
 
 ## Install
@@ -93,7 +93,8 @@ Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by defau
 | **Apps** | Installed programs with a search box: uninstall them, clean up leftovers, and switch startup items on or off. |
 | **Updates** | Checks GitHub for a newer release and installs it when you ask. |
 | **Tasks** | A page with a field to add a reminder or to-do and the list of what is pending; click the circle to tick one off. Also from Spotlight with `remind` and `todo`. A toast and a beep when one is due. |
-| **Controls** | The sliders button beside the gear opens quick tiles: Wi-Fi, Bluetooth, microphone mute, sound mute, keep awake and minimal notch. A lit tile is on; click to flip it. |
+| **Controls** | The sliders button beside the gear opens quick tiles: Wi-Fi, Bluetooth, microphone mute, sound mute, keep awake and weather. A lit tile is on; click to flip it. |
+| **Weather** | Temperature, humidity and the weather where you are, at the top right of the Clock page. Off until you switch it on (the Weather tile, or `weather` in Spotlight). |
 | **Alerts** | Notices for Caps Lock, keyboard language, losing or regaining internet and a new audio output. |
 | **Minimal notch** | A tray option that shrinks the closed notch to a thin line, for screens with thick top bezels. |
 | **Tray icon** | Keep awake, Minimal notch, Settings and Quit. |
@@ -124,6 +125,11 @@ break starts by itself, then focus again, and after the fourth focus session a 1
 breaks and the label shows where you are in the cycle.
 
 **Now playing.** When several players are open, hover the album art to see which one is shown and click it to switch.
+
+**Weather.** The location comes from Windows (Settings, Privacy, Location, which must allow desktop apps) and is rounded
+to two decimals before it is sent. If Windows gives none, the Clock page says "No location"; type `city` and a name in
+Spotlight to use that instead. The place shown is the time zone's city, such as Jakarta, and the reading refreshes every
+20 minutes. Temperatures are in °C.
 
 **Controls.** Wi-Fi and Bluetooth are switched through the Windows radio settings, the same as the Quick Settings tiles. A PC
 without that radio (many desktops have no Wi-Fi) shows the tile as "Not available". Switching Wi-Fi or Bluetooth off cuts
@@ -160,6 +166,7 @@ web with DuckDuckGo.
 | `remind 15m stretch`, `remind every 45m drink water`, `todo buy milk` | Adds a reminder or a to-do. `todo` lists them and Enter ticks one off, `snooze` repeats the last one in 10 minutes. |
 | `time tokyo`, `time in new york` | The time in another city, with the gap from here. About 40 cities; daylight saving comes from Windows. Enter copies it. |
 | `until 25 dec`, `days until 2026-12-25` | The days left to a date. Enter copies it. |
+| `weather`, `city bandung` | Switches the weather on or off, or uses a city instead of the Windows location. |
 | `update`, `version` | Checks for a newer version, or installs the one that was found. |
 | `mute`, `mic` | Mutes or unmutes the speakers (the volume HUD shows it) or the default microphone. |
 | `note buy milk` | Saves a dated line to `%APPDATA%\Camel\notes.txt`. `notes` opens that file. |
@@ -169,14 +176,15 @@ web with DuckDuckGo.
 
 ## Privacy and security
 
-**Network.** Camel makes two kinds of request, and both can be turned off:
+**Network.** Camel makes three kinds of request, and each can be turned off:
 
 | Request | When | What it sends |
 |---|---|---|
 | lrclib.net | **Synced lyrics** is on and a track plays | The artist, track title and duration. |
+| api.open-meteo.com | **Weather** is on | Your location rounded to about a kilometre (from Windows location, or geocoded from the city you typed, which sends that city name to geocoding-api.open-meteo.com). |
 | api.github.com and github.com | **Check for updates** is on, or you ask for an update | A request for the latest release of this repository, which reveals your IP address and nothing else of yours. |
 
-With both off, Camel makes no network requests. The web row in Spotlight only opens your browser when you pick it.
+With all three off, Camel makes no network requests. Weather is off by default. The web row in Spotlight only opens your browser when you pick it.
 
 **Local data.** Clipboard history lives in memory and disappears when Camel quits. Turn **Clipboard history** off and
 Camel stops reading the clipboard altogether. Settings, notes and the uninstall record live in `%APPDATA%\Camel`.
@@ -269,6 +277,7 @@ src/update.rs                release check, verified download, in-place swap
 src/reminders.rs             reminders and to-dos, parsing and storage
 src/worldtime.rs            time in other cities and days to a date
 src/radios.rs               Wi-Fi and Bluetooth on or off
+src/weather.rs              temperature and humidity from Open-Meteo
 src/system.rs               Windows queries: clock format, animation setting, keyboard, network, audio output
 src/focus.rs                 focus timer
 ```

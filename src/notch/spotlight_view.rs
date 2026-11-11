@@ -128,6 +128,7 @@ fn action_style(a: &actions::Action) -> (Color32, fn(&egui::Painter, egui::Pos2,
         Mute(true) => (RED, ui::icon_mic),
         Note(_) | OpenNotes => (ORANGE, ui::icon_clipboard),
         Update => (GREEN, ui::icon_app),
+        Weather | City(_) => (BLUE, ui::icon_cloud),
         Remind(_) | Snooze => (ORANGE, ui::icon_timer),
         Done(_) => (GREEN, ui::icon_timer),
     }

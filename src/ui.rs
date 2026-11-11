@@ -299,8 +299,8 @@ pub fn icon_sliders(p: &Painter, c: Pos2, col: Color32) {
     p.circle_filled(at(c, (3.0, 3.5)), 2.4, col);
 }
 
-pub fn icon_pill(p: &Painter, c: Pos2, col: Color32) {
-    p.rect_filled(Rect::from_center_size(c, vec2(14.0, 3.0)), 1.5, col);
+pub fn icon_cloud(p: &Painter, c: Pos2, col: Color32) {
+    path(p, c, &[(-7.5, 4.5), (-7.5, 0.5), (-4.5, -1.5), (-3.0, -5.0), (1.0, -6.5), (4.5, -4.0), (5.5, -1.5), (7.8, 0.0), (7.8, 4.5)], 2.5, true, W, col);
 }
 
 pub fn icon_search(p: &Painter, c: Pos2, col: Color32) {

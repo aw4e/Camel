@@ -5,7 +5,7 @@ mod tabs;
 use crate::platform::{self, HOTKEY_PRESSED, Tray};
 use crate::prelude::*;
 use crate::settings::{self, Settings};
-use crate::{actions, apps, clipboard, focus, media, mixer, monitor, notes, radios, reminders, spotlight, system, update};
+use crate::{actions, apps, clipboard, focus, media, mixer, monitor, notes, radios, reminders, spotlight, system, update, weather};
 use chrono::Local;
 use global_hotkey::GlobalHotKeyManager;
 use global_hotkey::hotkey::HotKey;
@@ -216,6 +216,7 @@ pub(crate) struct Notch {
     lyric_offset: f64,
     lyric_track: String,
     updater: update::Updater,
+    weather: weather::Service,
     /// Wi-Fi and Bluetooth, and the mute state of the microphone and speakers as the controls page last read them.
     radios: radios::Radios,
     controls_at: Instant,
@@ -239,6 +240,7 @@ pub(crate) struct Notch {
 impl Notch {
     pub(crate) fn new(ctx: &egui::Context) -> Self {
         let settings = Settings::load();
+        let weather = weather::Service::spawn(settings.weather, settings.city.clone());
         let record = apps::load_record();
         let tray = platform::make_tray(settings.minimal);
         let hotkey = platform::register_hotkey(ctx, settings.spotlight);
@@ -313,6 +315,7 @@ impl Notch {
             lyric_offset: 0.0,
             lyric_track: String::new(),
             updater: update::Updater::new(),
+            weather,
             radios: radios::Radios::spawn(),
             controls_at: Instant::now() - Duration::from_secs(5),
             mic_muted: None,
@@ -351,6 +354,17 @@ impl Notch {
             until: Instant::now() + Duration::from_millis(1600),
             level: Some(if muted { 0.0 } else { level }),
         });
+    }
+
+    fn set_weather(&mut self, on: bool) {
+        self.settings.weather = on;
+        self.settings.save();
+        self.weather.set_enabled(on);
+        self.show_toast(
+            ToastIcon::Online,
+            if on { "Weather on" } else { "Weather off" },
+            if on { "Shown on the Clock page".to_owned() } else { "No requests are made".to_owned() },
+        );
     }
 
     fn set_minimal(&mut self, on: bool) {
@@ -408,6 +422,16 @@ impl Notch {
                 }
             }
             Update => self.update_action(),
+            Weather => self.set_weather(!self.settings.weather),
+            City(name) => {
+                self.settings.city.clone_from(&name);
+                self.settings.save();
+                self.weather.set_city(&name);
+                if !self.settings.weather {
+                    self.set_weather(true);
+                }
+                self.show_toast(ToastIcon::Online, "Weather city", shorten(&name, 36));
+            }
             Remind(spec) => {
                 let when = reminders::describe(spec.due, spec.every, Local::now());
                 let text = spec.text.clone();

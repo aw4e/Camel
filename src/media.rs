@@ -132,8 +132,8 @@ fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &
     }
 
     let props = session.TryGetMediaPropertiesAsync()?.join()?;
-    let title = props.Title()?.to_string();
-    let artist = props.Artist()?.to_string();
+    let title = crate::widgets::clean_text(&props.Title()?.to_string());
+    let artist = crate::widgets::clean_text(&props.Artist()?.to_string());
     let playing = session.GetPlaybackInfo()?.PlaybackStatus()? == Status::Playing;
 
     // Only re-fetch art when the track changes; reuse the old Arc otherwise.

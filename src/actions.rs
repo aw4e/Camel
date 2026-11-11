@@ -22,6 +22,10 @@ pub enum Action {
     Done(u64),
     /// Ask again about the last reminder in ten minutes.
     Snooze,
+    /// Switch the weather on the Clock page on or off.
+    Weather,
+    /// Use this city for the weather instead of the Windows location.
+    City(String),
     /// Check for a newer version, or install the one that was found.
     Update,
     Timer(Duration),
@@ -160,6 +164,10 @@ pub fn suggest(query: &str, awake: bool, pending: &[crate::reminders::Reminder])
         for r in pending.iter().take(5) {
             add(Action::Done(r.id), &r.text, &format!("{} · Enter to tick off", crate::reminders::describe(r.due, r.every, now)));
         }
+    } else if let Some(city) = q.strip_prefix("city ").and_then(|_| query.trim().get(5..)).map(str::trim).filter(|c| !c.is_empty()) {
+        add(Action::City(city.to_owned()), &format!("Use {city} for the weather"), "Instead of the Windows location");
+    } else if q == "weather" {
+        add(Action::Weather, "Switch the weather on or off", "Temperature and humidity on the Clock page");
     } else if q == "snooze" {
         add(Action::Snooze, "Snooze the last reminder", "Ask again in 10 minutes");
     } else if let Some(text) = query.trim().get(5..).filter(|_| q.starts_with("note ")).map(str::trim).filter(|t| !t.is_empty()) {
@@ -327,6 +335,9 @@ mod tests {
         assert!(matches!(one("TODO Buy Milk"), Some(Action::Remind(spec)) if spec.text == "Buy Milk" && spec.due.is_none()));
         assert_eq!(one("remind 15m"), None, "a reminder needs text");
         assert_eq!(one("snooze"), Some(Action::Snooze));
+        assert_eq!(one("weather"), Some(Action::Weather));
+        assert_eq!(one("City  Bandung "), Some(Action::City("Bandung".into())));
+        assert_eq!(one("city "), None);
         let pending = [crate::reminders::Reminder { id: 7, text: "call mom".into(), due: None, every: None }];
         let listed = suggest("todo", false, &pending);
         assert_eq!((listed.len(), &listed[0].action), (1, &Action::Done(7)));

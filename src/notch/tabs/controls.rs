@@ -27,7 +27,7 @@ impl Notch {
             ("Microphone", self.mic_muted.map(|m| !m), yes_no(self.mic_muted.map(|m| !m), "Live", "Muted"), BLUE, ui::icon_mic),
             ("Sound", self.speakers_muted.map(|m| !m), yes_no(self.speakers_muted.map(|m| !m), "On", "Muted"), BLUE, ui::icon_speaker),
             ("Keep awake", Some(self.awake), if self.awake { "On" } else { "Off" }, GREEN, ui::icon_sun),
-            ("Minimal notch", Some(self.settings.minimal), if self.settings.minimal { "On" } else { "Off" }, Color32::from_rgb(94, 92, 230), ui::icon_pill),
+            ("Weather", Some(self.settings.weather), if self.settings.weather { "On" } else { "Off" }, Color32::from_rgb(94, 92, 230), ui::icon_cloud),
         ];
 
         let p = ui.painter().clone();
@@ -83,7 +83,7 @@ impl Notch {
             Some(2) => self.mic_muted = mixer::toggle_mute(true),
             Some(3) => self.speakers_muted = mixer::toggle_mute(false),
             Some(4) => self.set_awake(!self.awake),
-            Some(5) => self.set_minimal(!self.settings.minimal),
+            Some(5) => self.set_weather(!self.settings.weather),
             _ => {}
         }
     }

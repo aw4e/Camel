@@ -154,7 +154,7 @@ impl History {
 
 /// One line of at most `max` characters for a list row.
 pub fn one_line(s: &str, max: usize) -> String {
-    s.chars().take(max * 2).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ").chars().take(max).collect()
+    crate::widgets::clean_text(&s.chars().take(max * 2).collect::<String>()).split_whitespace().collect::<Vec<_>>().join(" ").chars().take(max).collect()
 }
 
 #[cfg(test)]

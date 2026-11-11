@@ -69,6 +69,12 @@ pub(crate) fn accent(a: &media::Art) -> Color32 {
     Color32::from_rgb((r as f32 * k).min(255.0) as u8, (g as f32 * k).min(255.0) as u8, (b as f32 * k).min(255.0) as u8)
 }
 
+/// Text from a player, a lyrics file or the clipboard without the invisible characters that follow an emoji (variation
+/// selectors, zero-width joiners). No font draws them, so they would show as empty boxes.
+pub(crate) fn clean_text(s: &str) -> String {
+    s.chars().filter(|c| !matches!(c, '\u{FE0E}' | '\u{FE0F}' | '\u{200B}'..='\u{200D}' | '\u{2060}')).collect()
+}
+
 /// "14:05", or "2:05 PM" on a 12-hour clock.
 pub(crate) fn clock_text(now: &chrono::DateTime<chrono::Local>, h24: bool) -> String {
     now.format(if h24 { "%H:%M" } else { "%-I:%M %p" }).to_string()
@@ -78,6 +84,13 @@ pub(crate) fn clock_text(now: &chrono::DateTime<chrono::Local>, h24: bool) -> St
 mod tests {
     use super::*;
     use chrono::TimeZone;
+
+    #[test]
+    fn invisible_emoji_parts_are_dropped_and_visible_text_is_kept() {
+        assert_eq!(clean_text("INDAH \u{2600}\u{FE0F} #tag"), "INDAH \u{2600} #tag");
+        assert_eq!(clean_text("a\u{200D}b\u{200B}c"), "abc");
+        assert_eq!(clean_text("Sepertinya Akan Jadi Hari"), "Sepertinya Akan Jadi Hari");
+    }
 
     #[test]
     fn the_clock_follows_the_hour_format() {

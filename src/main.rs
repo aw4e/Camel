@@ -20,6 +20,7 @@ mod spotlight;
 mod system;
 mod ui;
 mod update;
+mod weather;
 mod widgets;
 mod worldtime;
 

@@ -80,6 +80,16 @@ pub(crate) fn setup_fonts(ctx: &egui::Context) {
     fonts.font_data.insert("ui-bold".into(), Arc::new(semibold));
     fonts.families.entry(FontFamily::Proportional).or_default().insert(0, "ui-regular".into());
     bold.insert(0, "ui-bold".into());
+    // Windows ships emoji and symbol fonts; as the last fallback they replace the empty boxes a title with an emoji would show
+    let windows = std::env::var_os("SystemRoot").map_or_else(|| PathBuf::from(r"C:\Windows"), PathBuf::from).join("Fonts");
+    for (name, file) in [("system-emoji", "seguiemj.ttf"), ("system-symbols", "seguisym.ttf")] {
+        if let Ok(bytes) = std::fs::read(windows.join(file)) {
+            fonts.font_data.insert(name.into(), Arc::new(FontData::from_owned(bytes)));
+            for family in [fonts.families.entry(FontFamily::Proportional).or_default(), &mut bold] {
+                family.push(name.into());
+            }
+        }
+    }
     fonts.families.insert(FontFamily::Name("bold".into()), bold);
     ctx.set_fonts(fonts);
 }
