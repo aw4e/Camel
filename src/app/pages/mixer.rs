@@ -37,6 +37,7 @@ impl Notch {
         let refs: Vec<(&str, f32, bool, f32)> = snapshot.iter().map(|(n, l, m, k)| (n.as_str(), *l, *m, *k)).collect();
         let strips = channels::summarize(&refs, &self.settings.channel_overrides);
         let loudest = strips.iter().map(|s| s.peak).fold(0.0, f32::max);
+        let silent = strips.iter().all(|s| s.apps.is_empty());
 
         let count = channels::NAMES.len() + 1;
         let w = (OPEN_W - 2.0 * MARGIN - GAP_S * (count as f32 - 1.0)) / count as f32;
@@ -108,7 +109,15 @@ impl Notch {
                     }
                 }
                 if shown.is_empty() {
-                    p.text(pos2(cx, card.top() + 135.0), Align2::CENTER_CENTER, "-", font(9.0), fade(DIM, a));
+                    // with nothing playing anywhere, say why the strips are empty instead of ten dashes
+                    let text = if silent && i == 2 {
+                        "No audio"
+                    } else if silent {
+                        ""
+                    } else {
+                        "-"
+                    };
+                    p.text(pos2(cx, card.top() + 135.0), Align2::CENTER_CENTER, text, font(9.0), fade(DIM, a));
                 }
             }
         }
