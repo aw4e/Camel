@@ -30,8 +30,8 @@ Spotlight-style launcher.
 
 - **Small and quiet.** One executable of about 7 MB, written in Rust with [egui](https://github.com/emilk/egui) (glow
   backend). It trims its own memory when idle and hides while a fullscreen game or presentation is running.
-- **Private by default.** Clipboard history stays in memory. The only network requests are lyrics and update checks, and
-  each can be switched off, and the weather is off until you ask for it. See [Privacy and security](#privacy-and-security).
+- **Private by default.** Clipboard history stays in memory. The only network requests are lyrics, update checks and
+  the weather. Each can be switched off, and the weather is off until you ask for it. See [Privacy and security](#privacy-and-security).
 - **Open source.** MIT licensed, with tests for the logic and for the layout rules.
 
 ## Install
