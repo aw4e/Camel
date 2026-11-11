@@ -145,18 +145,28 @@ impl Notch {
             clip.galley(pos2(x0, y - galley.size().y / 2.0), galley, color);
         }
 
+        // timing buttons in the column under the lyrics button: "+" shows the lines later, "−" earlier; the number resets
+        let col = x1 + 26.0 - 11.0;
+        for (name, dy, glyph, step) in [("lyric-later", 34.0, "+", 0.5), ("lyric-earlier", 54.0, "−", -0.5)] {
+            let r = Rect::from_center_size(pos2(col, o.y + TOP + dy), Vec2::splat(18.0));
+            let tip = if step > 0.0 { "Show the lyrics later (0.5 s)" } else { "Show the lyrics earlier (0.5 s)" };
+            let resp = hit(ui, name, r).on_hover_text(tip);
+            p.circle_filled(r.center(), 9.0, fade(fill(if resp.hovered() { 30 } else { 16 }), a));
+            p.text(r.center(), Align2::CENTER_CENTER, glyph, bold(12.0), fade(Color32::WHITE, a));
+            if resp.clicked() {
+                self.lyric_offset += step;
+            }
+        }
         if self.lyric_offset != 0.0 {
-            let label = Rect::from_center_size(pos2(x1 + 26.0 - 40.0, o.y + TOP + 86.0), vec2(80.0, 12.0));
+            let label = Rect::from_center_size(pos2(col, o.y + TOP + 72.0), vec2(30.0, 12.0));
             let reset = hit(ui, "lyric-offset", label).on_hover_text("Click to remove the shift");
-            let col = if reset.hovered() { Color32::WHITE } else { DIM };
-            p.text(label.right_center(), Align2::RIGHT_CENTER, format!("shifted {:+.1} s", -self.lyric_offset), font(9.5), fade(col, a));
+            let color = if reset.hovered() { Color32::WHITE } else { DIM };
+            p.text(label.center(), Align2::CENTER_CENTER, format!("{:+.1}", self.lyric_offset), font(9.5), fade(color, a));
             if reset.clicked() {
                 self.lyric_offset = 0.0;
             }
         }
         if dur <= 0.0 {
-            // no timeline from the player: the position is counted here, and a click on a line corrects it
-            p.text(pos2(x0, o.y + TOP + 96.0), Align2::LEFT_CENTER, "No timeline from this player. Click the line you hear to sync.", font(9.5), fade(DIM, a));
             return;
         }
         let bar = Rect::from_x_y_ranges(x0..=x1 + 26.0, o.y + TOP + 95.0..=o.y + TOP + 97.0);
