@@ -95,11 +95,7 @@ impl Notch {
         let Some(lines) = m.lyrics.as_deref() else { return };
         let (video, dur) = (m.position(), m.dur);
         // music videos often start with an intro the audio-only lyrics do not have: the offset shifts the lyrics
-        let track = format!(
-            "{}
-{}",
-            m.artist, m.title
-        );
+        let track = m.track_key();
         if self.lyric_track != track {
             self.lyric_offset = self.settings.lyric_offset(&track);
             self.lyric_track = track;

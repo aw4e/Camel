@@ -38,6 +38,27 @@ impl Notch {
 
         if !self.dots_active() {
             let running = self.focus.running();
+            // while a song with synced lyrics plays, the current line takes the middle; a running timer keeps it
+            let shift = self.settings.lyric_offset(&m.track_key());
+            if let Some(line) = m.lyric_line(shift).filter(|_| self.settings.lyrics && !running) {
+                // room between the cover and the equalizer
+                let room = 2.0 * half - 76.0;
+                let mut size = 11.5;
+                let mut text = crate::widgets::clean_text(line);
+                let mut galley = p.layout_no_wrap(text.clone(), bold(size), fade(Color32::WHITE, a));
+                while galley.size().x > room && size > 9.5 {
+                    size -= 0.5;
+                    galley = p.layout_no_wrap(text.clone(), bold(size), fade(Color32::WHITE, a));
+                }
+                if galley.size().x > room {
+                    // still too wide: cut it by the share that fits
+                    let keep = (text.chars().count() as f32 * room / galley.size().x) as usize;
+                    text = crate::widgets::shorten(&text, keep.max(2));
+                    galley = p.layout_no_wrap(text, bold(size), fade(Color32::WHITE, a));
+                }
+                p.galley(pos2(c.x - galley.size().x / 2.0, c.y - galley.size().y / 2.0), galley, Color32::WHITE);
+                return;
+            }
             let (text, color) = if running {
                 let left = self.focus.remaining(Instant::now()).as_secs_f32().ceil() as u64;
                 (format!("{:02}:{:02}", left / 60, left % 60), self.phase_color())

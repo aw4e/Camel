@@ -42,6 +42,27 @@ impl State {
             _ => self.pos,
         }
     }
+
+    /// Names the track for things remembered per track, such as a lyric shift.
+    pub fn track_key(&self) -> String {
+        format!(
+            "{}
+{}",
+            self.artist, self.title
+        )
+    }
+
+    /// The lyric line to show now, if the track plays and its lyrics are loaded. `shift` is how far the lyrics run ahead of
+    /// the player; a line switches a quarter second early so it is read in time. None before the first line and on empty lines.
+    pub fn lyric_line(&self, shift: f64) -> Option<&str> {
+        let lines = self.lyrics.as_deref()?;
+        if !self.playing {
+            return None;
+        }
+        let pos = self.position() - shift + 0.25;
+        let current = lines.partition_point(|(t, _)| *t <= pos).checked_sub(1)?;
+        Some(lines[current].1.as_str()).filter(|t| !t.is_empty())
+    }
 }
 
 pub struct LyricsCtx {
@@ -254,6 +275,27 @@ mod tests {
         assert_eq!(app_name("chrome.exe"), "chrome");
         assert_eq!(app_name("F0DC299D809B9700"), "Browser");
         assert_eq!(app_name(""), "Browser");
+    }
+
+    #[test]
+    fn the_lyric_line_follows_the_position_and_the_shift() {
+        let lyrics = Arc::new(vec![(1.0, "one".to_owned()), (5.0, String::new()), (9.0, "nine".to_owned())]);
+        let mut s = State { playing: true, pos: 0.0, dur: 100.0, at: Some(Instant::now()), lyrics: Some(lyrics), ..State::default() };
+        assert_eq!(s.lyric_line(0.0), None, "before the first line");
+        s.pos = 2.0;
+        assert_eq!(s.lyric_line(0.0), Some("one"));
+        assert_eq!(s.lyric_line(-8.0), Some("nine"), "negative shift: the lyrics are late, so they are looked up further on");
+        s.pos = 6.0;
+        assert_eq!(s.lyric_line(0.0), None, "an empty line shows nothing");
+        s.pos = 8.8;
+        assert_eq!(s.lyric_line(0.0), Some("nine"), "a quarter second early");
+        s.playing = false;
+        assert_eq!(s.lyric_line(0.0), None, "paused");
+        assert_eq!(
+            s.track_key(),
+            "
+"
+        );
     }
 
     #[test]
