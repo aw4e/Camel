@@ -168,7 +168,7 @@ impl Notch {
                 let shake = if self.reduce_motion { Vec2::ZERO } else { vec2((t * 40.0).sin() * 1.4, (t * 53.0).cos() * 1.0) };
                 // below the hand, and never lower than the window
                 let size = galley.size() + vec2(14.0, 6.0);
-                let centre = pt + vec2(8.0, 24.0) + shake;
+                let centre = pt + vec2(6.0, 15.0) + shake;
                 let chip = Rect::from_center_size(pos2(centre.x, centre.y.min(o.y + MIXER_H - size.y / 2.0 - 2.0)), size);
                 p.rect_filled(chip, chip.height() / 2.0, fade(fill(44), a));
                 p.galley(chip.center() - galley.size() / 2.0, galley, Color32::WHITE);
