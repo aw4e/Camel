@@ -1,4 +1,4 @@
-use crate::notch::Notch;
+use crate::app::Notch;
 use crate::prelude::*;
 use crate::spotlight;
 

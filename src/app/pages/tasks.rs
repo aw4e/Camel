@@ -1,4 +1,4 @@
-use crate::notch::{Notch, ToastIcon};
+use crate::app::{Notch, ToastIcon};
 use crate::prelude::*;
 use crate::reminders;
 use chrono::Local;

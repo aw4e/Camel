@@ -1,5 +1,5 @@
+use crate::app::Notch;
 use crate::media;
-use crate::notch::Notch;
 use crate::prelude::*;
 
 impl Notch {

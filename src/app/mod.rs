@@ -1,6 +1,10 @@
 mod draw;
+pub(crate) mod icons;
+pub(crate) mod layout;
+mod pages;
+pub(crate) mod prelude;
 mod spotlight_view;
-mod tabs;
+pub(crate) mod widgets;
 
 use crate::platform::{self, HOTKEY_PRESSED, Tray};
 use crate::prelude::*;
@@ -9,10 +13,10 @@ use crate::{actions, apps, clipboard, focus, media, mixer, monitor, notes, radio
 use chrono::Local;
 use global_hotkey::GlobalHotKeyManager;
 use global_hotkey::hotkey::HotKey;
+use pages::clock::month_rows;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use tabs::clock::month_rows;
 use tray_icon::menu::MenuEvent;
 
 fn tab_icon(t: Tab) -> fn(&egui::Painter, egui::Pos2, Color32) {

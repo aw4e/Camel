@@ -1,32 +1,17 @@
 #![windows_subsystem = "windows"]
 
-mod actions;
-mod apps;
-mod clipboard;
-mod focus;
-mod layout;
-mod lyrics;
-mod media;
-mod mixer;
-mod monitor;
-mod notch;
-mod notes;
-mod platform;
-mod prelude;
-mod radios;
-mod reminders;
-mod settings;
-mod spotlight;
-mod system;
-mod ui;
-mod update;
-mod weather;
-mod widgets;
-mod worldtime;
+mod app;
+mod features;
+mod services;
 
+// The modules live in folders; these names keep `crate::media`, `crate::ui` and so on short for every file.
+use app::{icons as ui, layout, prelude, widgets};
+use features::{actions, apps, clipboard, focus, notes, reminders, settings, spotlight, worldtime};
+use services::{lyrics, media, mixer, monitor, platform, radios, system, update, weather};
+
+use app::Notch;
 use eframe::egui::{self, vec2};
 use layout::{PILL_H, PILL_W};
-use notch::Notch;
 use settings::Settings;
 
 fn main() -> eframe::Result {

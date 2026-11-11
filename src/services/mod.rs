@@ -1,0 +1,9 @@
+pub(crate) mod lyrics;
+pub(crate) mod media;
+pub(crate) mod mixer;
+pub(crate) mod monitor;
+pub(crate) mod platform;
+pub(crate) mod radios;
+pub(crate) mod system;
+pub(crate) mod update;
+pub(crate) mod weather;

@@ -1,5 +1,5 @@
+use crate::app::{Notch, ToastIcon};
 use crate::clipboard;
-use crate::notch::{Notch, ToastIcon};
 use crate::prelude::*;
 
 impl Notch {

@@ -1,5 +1,5 @@
+use crate::app::{Notch, ToastIcon};
 use crate::apps;
-use crate::notch::{Notch, ToastIcon};
 use crate::prelude::*;
 use std::path::PathBuf;
 

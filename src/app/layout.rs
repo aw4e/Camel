@@ -77,7 +77,7 @@ pub(crate) const SPOT_W: f32 = 480.0;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::notch::MAIN_TABS;
+    use crate::app::MAIN_TABS;
     use crate::ui;
 
     #[test]

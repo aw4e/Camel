@@ -1,4 +1,4 @@
-use crate::notch::{MAIN_TABS, Notch, Tab, ToastIcon, tab_icon, tab_label, tab_name};
+use crate::app::{MAIN_TABS, Notch, Tab, ToastIcon, tab_icon, tab_label, tab_name};
 use crate::prelude::*;
 use crate::{media, update};
 use chrono::Local;
@@ -273,7 +273,7 @@ impl Notch {
             Tab::Apps => self.tab_apps(ui, o, content),
             Tab::Tasks => self.tab_tasks(ui, o, content),
             Tab::Controls => self.tab_controls(ui, o, content),
-            Tab::Clock => super::tabs::clock::tab_clock(&p, o, content, self.h24, &self.weather.status()),
+            Tab::Clock => super::pages::clock::tab_clock(&p, o, content, self.h24, &self.weather.status()),
             Tab::Mixer => self.tab_mixer(ui, o, content),
             Tab::Settings => self.tab_settings(ui, o, content),
         }

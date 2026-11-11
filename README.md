@@ -255,36 +255,32 @@ if you want that look.
 
 ```
 src/main.rs                  entry point
-src/notch.rs                 app state, input, animation, window sizing
-src/notch/draw.rs            closed pill, toast and the tab bar
-src/notch/tabs/              one file per page: media, mixer, clock, timer, tasks, controls, shelf, clipboard, apps, settings
-src/notch/spotlight_view.rs  Spotlight panel
-src/layout.rs                golden-ratio and Fibonacci layout tokens, with tests
-src/platform.rs              tray, hotkey, fonts, window frame, elevation
-src/widgets.rs               small drawing and input helpers
-src/ui.rs                    icons, sliders, switches, notch shape
-src/media.rs                 Windows media session worker
-src/lyrics.rs                lrclib lookup, name cleaning, LRC parsing
-src/mixer.rs                 WASAPI master and per-app volume, mute
-src/monitor.rs               battery, CPU/RAM, mic/camera, clipboard, memory trim
-src/spotlight.rs             launcher index, search and calculator
-src/settings.rs              settings file and autostart
-src/apps.rs                  installed programs, uninstall, leftovers, startup entries
-src/actions.rs               Spotlight actions: power, timers, quitting programs, unit conversion
-src/clipboard.rs             clipboard history and pins
-src/notes.rs                 quick notes
-src/update.rs                release check, verified download, in-place swap
-src/reminders.rs             reminders and to-dos, parsing and storage
-src/worldtime.rs            time in other cities and days to a date
-src/radios.rs               Wi-Fi and Bluetooth on or off
-src/weather.rs              temperature and humidity from Open-Meteo
-src/system.rs               Windows queries: clock format, animation setting, keyboard, network, audio output
-src/focus.rs                 focus timer
+src/app/                     the notch window
+    mod.rs                   app state, input, animation, window sizing
+    draw.rs                  closed pill, toast and the tab bar
+    spotlight_view.rs        Spotlight panel
+    pages/                   one file per page: media, mixer, clock, timer, tasks, controls, shelf, clipboard, apps, settings
+    layout.rs                golden-ratio and Fibonacci layout tokens, with tests
+    widgets.rs               small drawing and input helpers
+    icons.rs                 icons, sliders, switches, notch shape
+    prelude.rs               what every page imports
+src/services/                what talks to Windows or the network
+    media.rs  lyrics.rs      Windows media session, lrclib lookup and LRC parsing
+    mixer.rs  monitor.rs     WASAPI volume and mute, battery, CPU/RAM, mic/camera, clipboard, memory trim
+    system.rs  radios.rs     clock format, keyboard, network, audio output; Wi-Fi and Bluetooth
+    weather.rs  update.rs    Open-Meteo weather, release check with a verified download
+    platform.rs              tray, hotkey, fonts, window frame, elevation
+src/features/                logic that needs no window
+    actions.rs  spotlight.rs Spotlight actions and search, calculator, unit conversion
+    apps.rs  clipboard.rs    installed programs and uninstall, clipboard history and pins
+    focus.rs  reminders.rs   focus timer and rounds, reminders and to-dos
+    notes.rs  worldtime.rs   quick notes, time in other cities and days to a date
+    settings.rs              settings file and autostart
 ```
 
 ## Design rules
 
-Layout numbers are not picked by eye. They are named constants in `src/layout.rs`, and its tests fail if a screen drifts
+Layout numbers are not picked by eye. They are named constants in `src/app/layout.rs`, and its tests fail if a screen drifts
 from them:
 
 - **Margins:** every screen has a 16 px left and right margin, on a 4 px grid. List rows start at the margin and inset
@@ -325,7 +321,7 @@ Bug reports, ideas and pull requests are welcome.
 - **Found a bug or want a feature?** Open an [issue](https://github.com/aw4e/Camel/issues). For a bug, say which Windows
   version and which player or app was involved, and what you expected.
 - **Sending code?** Keep the checks above green, add a test for logic that can be tested without a window, and keep layout
-  numbers in `src/layout.rs` rather than in the drawing code. One change per pull request keeps review quick.
+  numbers in `src/app/layout.rs` rather than in the drawing code. One change per pull request keeps review quick.
 - **Security problem?** Please do not post details in a public issue. Use **Report a vulnerability** on the repository's
   Security tab, or open an issue that only says you found one and ask for a private channel.
 

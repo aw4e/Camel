@@ -43,7 +43,7 @@ pub(crate) struct Tray {
 
 pub(crate) fn make_tray(minimal: bool) -> Tray {
     // brand mark, 32 px small cut (transparent: reads on light and dark taskbars)
-    let icon = image::load_from_memory(include_bytes!("../assets/brand/symbol-32.png"))
+    let icon = image::load_from_memory(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/brand/symbol-32.png")))
         .ok()
         .and_then(|i| tray_icon::Icon::from_rgba(i.to_rgba8().into_raw(), 32, 32).ok());
     let menu = Menu::new();
@@ -74,8 +74,8 @@ pub(crate) fn setup_fonts(ctx: &egui::Context) {
 
     let mut fonts = egui::FontDefinitions::default();
     let mut bold = fonts.families[&FontFamily::Proportional].clone();
-    let regular = regular.unwrap_or_else(|| FontData::from_static(include_bytes!("../assets/OpenSans-Regular.ttf")));
-    let semibold = semibold.unwrap_or_else(|| FontData::from_static(include_bytes!("../assets/OpenSans-SemiBold.ttf")));
+    let regular = regular.unwrap_or_else(|| FontData::from_static(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/OpenSans-Regular.ttf"))));
+    let semibold = semibold.unwrap_or_else(|| FontData::from_static(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/OpenSans-SemiBold.ttf"))));
     fonts.font_data.insert("ui-regular".into(), Arc::new(regular));
     fonts.font_data.insert("ui-bold".into(), Arc::new(semibold));
     fonts.families.entry(FontFamily::Proportional).or_default().insert(0, "ui-regular".into());
