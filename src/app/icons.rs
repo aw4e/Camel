@@ -303,6 +303,23 @@ pub fn icon_cloud(p: &Painter, c: Pos2, col: Color32) {
     path(p, c, &[(-7.5, 4.5), (-7.5, 0.5), (-4.5, -1.5), (-3.0, -5.0), (1.0, -6.5), (4.5, -4.0), (5.5, -1.5), (7.8, 0.0), (7.8, 4.5)], 2.5, true, W, col);
 }
 
+/// A small battery with the charge drawn inside; green while charging, red when low.
+pub fn battery_gauge(p: &Painter, left_center: Pos2, pct: u8, charging: bool, f: f32) {
+    let body = Rect::from_min_size(left_center - vec2(0.0, 5.5), vec2(22.0, 11.0));
+    let edge = fade(Color32::from_gray(160), f);
+    p.rect_stroke(body, 3.0, Stroke::new(1.0, edge), StrokeKind::Inside);
+    p.rect_filled(Rect::from_center_size(pos2(body.right() + 2.0, body.center().y), vec2(2.0, 4.0)), 1.0, edge);
+    let level = if charging {
+        GREEN
+    } else if pct <= 20 {
+        RED
+    } else {
+        Color32::WHITE
+    };
+    let inner = body.shrink(2.0);
+    p.rect_filled(Rect::from_min_size(inner.min, vec2(inner.width() * pct as f32 / 100.0, inner.height())), 1.5, fade(level, f));
+}
+
 pub fn icon_search(p: &Painter, c: Pos2, col: Color32) {
     p.circle_stroke(c + vec2(-1.5, -1.5), 6.0, Stroke::new(1.8, col));
     seg(p, c, (2.9, 2.9), (7.8, 7.8), 1.9, col);

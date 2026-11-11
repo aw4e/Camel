@@ -48,7 +48,7 @@ pub(crate) const TAB_PILL_H: f32 = 24.0;
 /// A tab that is not chosen is an icon in a pill the height plus one Fibonacci step (5) wide. The chosen tab grows to also
 /// show its name beside the icon.
 pub(crate) const TAB_W: f32 = 29.0;
-/// Extra space after every second tab (audio, time, storage, apps): a Fibonacci step.
+/// Space between the tab groups: a Fibonacci step.
 pub(crate) const GROUP_GAP: f32 = 8.0;
 /// The track around the pills: the pill inset is 2 px, so its height is the pill height + 4.
 pub(crate) const TAB_INSET: f32 = 2.0;
@@ -58,14 +58,15 @@ pub(crate) fn tab_open_w(label_w: f32) -> f32 {
     TAB_W - GAP_S + 2.0 + label_w + GAP
 }
 
-/// Left edge of each tab inside the track, with the extra gap after every second one.
-pub(crate) fn tab_offsets(widths: &[f32]) -> Vec<f32> {
+/// Left edge of each tab inside the track, with a gap before every group after the first. `groups` says which group
+/// each tab is in, in order.
+pub(crate) fn tab_offsets(widths: &[f32], groups: &[usize]) -> Vec<f32> {
     let mut x = 0.0;
     widths
         .iter()
-        .enumerate()
-        .map(|(i, w)| {
-            let at = x + (i / 2) as f32 * GROUP_GAP;
+        .zip(groups)
+        .map(|(w, g)| {
+            let at = x + *g as f32 * GROUP_GAP;
             x += w;
             at
         })
@@ -77,7 +78,7 @@ pub(crate) const SPOT_W: f32 = 480.0;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::MAIN_TABS;
+    use crate::app::{GROUPS, MAIN_TABS};
     use crate::ui;
 
     #[test]
@@ -125,13 +126,28 @@ mod tests {
         assert_eq!(TAB_W, TAB_PILL_H + GAP_S);
         // gaps come from the Fibonacci scale
         assert!([3.0, 5.0, 8.0, 13.0, 21.0, 34.0].contains(&GROUP_GAP));
-        // the bar leaves room for the battery readout on its right (leftmost at x = 358), even with the widest name chosen
-        // ("Clipboard" in bold 11 px is about 56 px wide)
-        let widest = tab_open_w(56.0);
-        let widths: Vec<f32> = (0..MAIN_TABS.len()).map(|i| if i == 0 { widest } else { TAB_W }).collect();
-        let offsets = tab_offsets(&widths);
-        let track_right = 12.0 + offsets[MAIN_TABS.len() - 1] + TAB_W + 2.0 * TAB_INSET;
-        assert!(track_right + 8.0 <= 358.0, "tab bar ends at {track_right}");
-        assert_eq!(tab_offsets(&[10.0, 10.0, 10.0]), [0.0, 10.0, 28.0], "the gap comes after every second tab");
+        // the bar leaves room for both privacy dots and the battery readout on its right (leftmost at x = 302), with the
+        // biggest group open and the widest name chosen ("Clipboard" in bold 11 px is about 56 px wide)
+        for (open, (name, _)) in GROUPS.iter().enumerate() {
+            let widths: Vec<f32> = GROUPS
+                .iter()
+                .enumerate()
+                .flat_map(|(g, (_, pages))| pages.iter().enumerate().map(move |(i, _)| (g, i)))
+                .map(|(g, i)| match (g == open, i) {
+                    (true, 0) => tab_open_w(56.0),
+                    (true, _) => TAB_W,
+                    (false, 0) => TAB_W,
+                    (false, _) => 0.0,
+                })
+                .collect();
+            let groups: Vec<usize> = GROUPS.iter().enumerate().flat_map(|(g, (_, pages))| pages.iter().map(move |_| g)).collect();
+            let offsets = tab_offsets(&widths, &groups);
+            let last = widths.len() - 1;
+            let track_right = 12.0 + offsets[last] + widths[last] + 2.0 * TAB_INSET;
+            assert!(track_right + 8.0 <= 302.0, "tab bar with {name} open ends at {track_right}");
+        }
+        assert_eq!(tab_offsets(&[10.0, 10.0, 10.0], &[0, 0, 1]), [0.0, 10.0, 28.0], "the gap comes before each new group");
+        assert_eq!(GROUPS.iter().map(|(_, pages)| pages.len()).sum::<usize>(), MAIN_TABS.len());
+        assert!(GROUPS.iter().flat_map(|(_, pages)| pages.iter()).zip(MAIN_TABS).all(|(a, b)| *a == b), "groups list the pages in tab order");
     }
 }

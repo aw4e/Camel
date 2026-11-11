@@ -7,25 +7,25 @@ impl Notch {
         let s = &mut self.settings;
         let groups: [(&str, [(&str, &mut bool); 6]); 2] = [
             (
-                "GENERAL",
+                "BEHAVIOR",
                 [
                     ("Start with Windows", &mut s.autostart),
                     ("Hover to expand", &mut s.hover_expand),
                     ("Always on top", &mut s.always_on_top),
                     ("Hide on fullscreen", &mut s.hide_fullscreen),
+                    ("Spotlight (Alt+Space)", &mut s.spotlight),
                     ("Check for updates", &mut s.auto_update),
-                    ("Caps Lock and language", &mut s.key_toasts),
                 ],
             ),
             (
-                "FEATURES",
+                "SHOWS AND ALERTS",
                 [
                     ("Synced lyrics", &mut s.lyrics),
                     ("Clipboard history", &mut s.clipboard_toast),
                     ("Privacy indicators", &mut s.privacy_dots),
                     ("Volume HUD", &mut s.volume_hud),
+                    ("Caps Lock and language", &mut s.key_toasts),
                     ("Network and audio alerts", &mut s.device_toasts),
-                    ("Spotlight (Alt+Space)", &mut s.spotlight),
                 ],
             ),
         ];

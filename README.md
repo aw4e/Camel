@@ -53,12 +53,19 @@ task with `schtasks /Delete /TN Camel /F`.
 ## Using Camel
 
 - **Hover** the pill to open it. Move away to close it. With **Hover to expand** off, click it instead.
-- **Click** the tab icons, or **scroll** over the tab row, to switch pages. The chosen tab shows its name beside its icon.
+- The tab bar has four groups. A closed group is one icon; click it and it opens to show its pages, with the page you are on
+  named beside its icon:
+  - **Media**: Now playing, Mixer
+  - **Time**: Clock, Timer, Tasks
+  - **Shelf**: Shelf, Clipboard
+  - **System**: Controls, Apps
+- **Scroll** over the tab row to step through all the pages.
 - **Scroll sideways** on the media page to skip tracks. **Middle-click** toggles play and pause.
 - **Alt+Space** opens Spotlight.
 - **Gear icon** opens settings. Quit lives there and in the tray menu.
 
-Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by default except **Start with Windows**:
+Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by default except **Start with Windows**. The Settings page
+has two columns, behavior on the left and what Camel shows or announces on the right:
 
 | Setting | Effect |
 |---|---|
@@ -66,6 +73,7 @@ Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by defau
 | Hover to expand | Opens the notch on hover instead of on click. |
 | Always on top | Keeps the notch above other windows. |
 | Hide on fullscreen | Hides the notch while a fullscreen app is running. |
+| Spotlight (Alt+Space) | Enables the launcher and its hotkey. |
 | Check for updates | Looks for a newer release shortly after start and then daily. |
 | Synced lyrics | Fetches lyrics for the current track. |
 | Clipboard history | Records what you copy. Off means Camel never reads the clipboard. |
@@ -73,7 +81,6 @@ Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by defau
 | Volume HUD | Shows a bar when the master volume or mute changes. |
 | Caps Lock and language | Shows a notice when Caps Lock or the keyboard language changes. |
 | Network and audio alerts | Shows a notice when the internet drops or returns and when the default audio output changes (headphones, Bluetooth speakers). |
-| Spotlight (Alt+Space) | Enables the launcher and its hotkey. |
 
 ## Features
 
@@ -93,7 +100,7 @@ Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by defau
 | **Apps** | Installed programs with a search box: uninstall them, clean up leftovers, and switch startup items on or off. |
 | **Updates** | Checks GitHub for a newer release and installs it when you ask. |
 | **Tasks** | A page with a field to add a reminder or to-do and the list of what is pending; click the circle to tick one off. Also from Spotlight with `remind` and `todo`. A toast and a beep when one is due. |
-| **Controls** | The sliders button beside the gear opens quick tiles: Wi-Fi, Bluetooth, microphone mute, sound mute, keep awake and weather. A lit tile is on; click to flip it. |
+| **Controls** | The Controls page, in the System group, has quick tiles: Wi-Fi, Bluetooth, microphone mute, sound mute, keep awake and weather. A lit tile is on; click to flip it. |
 | **Weather** | Temperature, humidity and the weather where you are, at the top right of the Clock page. On by default; switch it off with the Weather tile, or `weather` in Spotlight. |
 | **Alerts** | Notices for Caps Lock, keyboard language, losing or regaining internet and a new audio output. |
 | **Minimal notch** | A tray option that shrinks the closed notch to a thin line, for screens with thick top bezels. |
@@ -291,12 +298,12 @@ from them:
   nested paddings compose without looking arbitrary. Small gaps are 5, standard 8, large 13.
 - **Golden ratio:** the content width (428 px) is cut 1.618 : 1 with a 13 px gutter. The Clock puts the time and date in
   the wide column (256 px) and the month in the narrow one (159 px). The Timer puts its controls in the wide column
-  and the progress ring in the narrow one. A tab that is not chosen is a pill the height plus one Fibonacci step wide; the chosen tab opens to show its name beside its icon.
+  and the progress ring in the narrow one. A closed tab is a pill the height plus one Fibonacci step wide; the chosen group opens and the chosen page shows its name beside its icon.
 - **Icons in buttons:** icons are drawn at 16 px and scaled to fit, leaving one Fibonacci step (5 px) above and below, never
   smaller than half size. A 24 px tab pill gets a 14 px icon.
 - **Grouped buttons:** related buttons share one rounded track with segments, like the tab bar. The timer's presets are
-  one group and its − and + another, with Reset standing alone. The tab bar itself is grouped in pairs (audio, time,
-  tasks and apps, storage).
+  one group and its − and + another, with Reset standing alone. The tab bar is grouped by what the pages are for
+  (media, time, shelf, system), and only the chosen group is open.
 - **Today in the calendar:** the disc behind today is wider than the digits (17 px for two digits) and still clears the
   rows above and below.
 - **Icons:** one drawing language, a 1.5 px stroke with round caps and joins, and rounded corners.

@@ -1,4 +1,4 @@
-use crate::app::{MAIN_TABS, Notch, Tab, ToastIcon, tab_icon, tab_label, tab_name};
+use crate::app::{GROUPS, MAIN_TABS, Notch, Tab, ToastIcon, group_of, tab_icon, tab_label, tab_name};
 use crate::prelude::*;
 use crate::{media, update};
 use chrono::Local;
@@ -152,34 +152,58 @@ impl Notch {
         let o = rect.min;
         let time = ui.input(|i| i.time) as f32;
 
-        // segmented control: one track; the chosen tab shows its name beside its icon, the others are icons only
+        // The tab bar: four groups. A closed group is its first page's icon; the chosen group opens to show its pages and
+        // the page you are on shows its name.
         let names: Vec<_> = MAIN_TABS.iter().map(|t| p.layout_no_wrap(tab_name(*t).to_owned(), bold(11.0), Color32::WHITE)).collect();
         let speed = if self.reduce_motion { 0.0 } else { 0.18 };
+        let chosen_group = group_of(self.tab);
+        let group_ids: Vec<usize> = MAIN_TABS.iter().map(|t| group_of(*t).unwrap_or(0)).collect();
         let widths: Vec<f32> = MAIN_TABS
             .iter()
             .enumerate()
             .map(|(i, t)| {
-                let target = if self.tab == *t { tab_open_w(names[i].size().x) } else { TAB_W };
+                let g = group_ids[i];
+                let target = if Some(g) == chosen_group {
+                    if self.tab == *t { tab_open_w(names[i].size().x) } else { TAB_W }
+                } else if GROUPS[g].1[0] == *t {
+                    TAB_W
+                } else {
+                    0.0
+                };
                 ui.ctx().animate_value_with_time(ui.scope_id().with(("tabw", i)), target, speed)
             })
             .collect();
-        let offsets = tab_offsets(&widths);
+        let offsets = tab_offsets(&widths, &group_ids);
         let last = MAIN_TABS.len() - 1;
         let track_h = TAB_PILL_H + 2.0 * TAB_INSET;
         let track = Rect::from_min_size(o + vec2(12.0, 16.0 - track_h / 2.0), vec2(offsets[last] + widths[last] + 2.0 * TAB_INSET, track_h));
         p.rect_filled(track, track_h / 2.0, fade(fill(14), a));
-        for i in (2..MAIN_TABS.len()).step_by(2) {
-            let x = track.left() + TAB_INSET + offsets[i] - GROUP_GAP / 2.0;
+        let tab_rect = |i: usize| Rect::from_min_size(track.min + vec2(TAB_INSET + offsets[i], TAB_INSET), vec2(widths[i], TAB_PILL_H));
+        // a lighter backing behind the open group, and a thin line between groups
+        if let Some(g) = chosen_group {
+            let members: Vec<usize> = (0..MAIN_TABS.len()).filter(|i| group_ids[*i] == g).collect();
+            let (first, end) = (tab_rect(members[0]), tab_rect(*members.last().unwrap_or(&0)));
+            p.rect_filled(Rect::from_min_max(first.min, end.max).expand2(vec2(1.0, 0.0)), TAB_PILL_H / 2.0, fade(fill(22), a));
+        }
+        for (_, pages) in GROUPS.iter().skip(1) {
+            let first = MAIN_TABS.iter().position(|t| *t == pages[0]).unwrap_or(0);
+            let x = tab_rect(first).left() - GROUP_GAP / 2.0;
             p.line_segment([pos2(x, track.top() + 8.0), pos2(x, track.bottom() - 8.0)], Stroke::new(1.0, fade(fill(30), a)));
         }
         for (i, tab) in MAIN_TABS.iter().enumerate() {
-            let r = Rect::from_min_size(track.min + vec2(TAB_INSET + offsets[i], TAB_INSET), vec2(widths[i], TAB_PILL_H));
-            let resp = hit(ui, &format!("tab{i}"), r).on_hover_text(tab_label(*tab));
+            if widths[i] < 2.0 {
+                continue;
+            }
+            let r = tab_rect(i);
+            let g = group_ids[i];
+            let in_open_group = Some(g) == chosen_group;
+            let tip = if in_open_group { tab_label(*tab).to_owned() } else { format!("{}: {}", GROUPS[g].0, tab_label(self.group_last[g])) };
+            let resp = hit(ui, &format!("tab{i}"), r).on_hover_text(tip);
             let chosen = self.tab == *tab;
             if chosen {
-                p.rect_filled(r, TAB_PILL_H / 2.0, fade(fill(36), a));
+                p.rect_filled(r, TAB_PILL_H / 2.0, fade(fill(40), a));
             } else if resp.hovered() {
-                p.rect_filled(r, TAB_PILL_H / 2.0, fade(fill(18), a));
+                p.rect_filled(r, TAB_PILL_H / 2.0, fade(fill(20), a));
             }
             let col = if chosen || resp.hovered() { Color32::WHITE } else { GRAY };
             let icon_at = pos2(r.left() + TAB_W / 2.0, r.center().y);
@@ -191,7 +215,8 @@ impl Notch {
                 p.with_clip_rect(r).galley(text_at, names[i].clone(), fade(Color32::WHITE, a * open * open));
             }
             if resp.clicked() {
-                self.tab = *tab;
+                // a closed group returns to the page you last had open in it
+                self.tab = if in_open_group { *tab } else { self.group_last[g] };
             }
         }
         // page content fades in after a tab switch
@@ -212,21 +237,8 @@ impl Notch {
             self.tab = if on { Tab::Media } else { Tab::Settings };
         }
 
-        let controls = Rect::from_center_size(pos2(right - 28.0, o.y + 16.0), vec2(24.0, 22.0));
-        let c = hit(ui, "controls", controls).on_hover_text("Controls");
-        let open = self.tab == Tab::Controls;
-        if open || c.hovered() {
-            p.rect_filled(controls, 12.0, fade(fill(if open { 46 } else { 24 }), a));
-        }
-        ui::scaled(&p, controls.center(), ui::icon_fit(controls.height()), || {
-            ui::icon_sliders(&p, controls.center(), fade(if open || c.hovered() { Color32::WHITE } else { GRAY }, a))
-        });
-        if c.clicked() {
-            self.tab = if open { Tab::Media } else { Tab::Controls };
-        }
-
         if on {
-            let q = Rect::from_center_size(pos2(right - 66.0, o.y + 16.0), vec2(46.0, 18.0));
+            let q = Rect::from_center_size(pos2(right - 44.0, o.y + 16.0), vec2(46.0, 18.0));
             let r = hit(ui, "quit", q);
             p.rect_filled(q, 9.0, fade(RED.gamma_multiply(if r.hovered() { 0.38 } else { 0.24 }), a));
             p.text(q.center(), Align2::CENTER_CENTER, "Quit", bold(11.0), fade(RED, a));
@@ -237,31 +249,24 @@ impl Notch {
         } else {
             let s = &self.monitor.stats;
             let dots = self.settings.privacy_dots && (s.mic || s.cam);
-            let mut x = right - 46.0;
-            // eight tabs leave room for the privacy dots or for the readout, not both; the dots win while a mic or camera is on
-            if dots {
-                for (on, col, is_mic) in [(s.mic, GREEN, true), (s.cam, ORANGE, false)] {
-                    if on {
-                        if is_mic {
-                            ui::icon_mic(&p, pos2(x, o.y + 16.0), fade(col, a));
-                        } else {
-                            p.circle_filled(pos2(x, o.y + 16.0), 4.0, fade(col, a));
-                        }
-                        x -= 20.0;
+            let mut x = right - 28.0;
+            if let Some(b) = s.battery {
+                ui::battery_gauge(&p, pos2(x - 24.0, o.y + 16.0), b, s.charging, a);
+                p.text(pos2(x - 31.0, o.y + 16.0), Align2::RIGHT_CENTER, format!("{b}%"), bold(12.0), fade(Color32::WHITE, a));
+                x -= 76.0;
+            } else if !dots {
+                p.text(pos2(x, o.y + 10.0), Align2::RIGHT_CENTER, format!("CPU {:.0}%", s.cpu), font(9.5), fade(GRAY, a));
+                p.text(pos2(x, o.y + 22.0), Align2::RIGHT_CENTER, format!("RAM {:.0}%", s.ram), font(9.5), fade(GRAY, a));
+            }
+            for (on, col, is_mic) in [(s.mic, GREEN, true), (s.cam, ORANGE, false)] {
+                if dots && on {
+                    if is_mic {
+                        ui::icon_mic(&p, pos2(x, o.y + 16.0), fade(col, a));
+                    } else {
+                        p.circle_filled(pos2(x, o.y + 16.0), 4.0, fade(col, a));
                     }
+                    x -= 20.0;
                 }
-            } else if let Some(b) = s.battery {
-                let col = if s.charging || b > 20 {
-                    Color32::WHITE
-                } else if b > 15 {
-                    ORANGE
-                } else {
-                    RED
-                };
-                p.text(pos2(x, o.y + 16.0), Align2::RIGHT_CENTER, format!("{b}%"), bold(12.0), fade(col, a));
-            } else {
-                p.text(pos2(x, o.y + 10.0), Align2::RIGHT_CENTER, format!("CPU {:.0}%", s.cpu), font(9.0), fade(GRAY, a));
-                p.text(pos2(x, o.y + 22.0), Align2::RIGHT_CENTER, format!("RAM {:.0}%", s.ram), font(9.0), fade(GRAY, a));
             }
         }
 

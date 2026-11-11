@@ -79,7 +79,20 @@ pub(crate) enum Tab {
     Settings,
 }
 
-pub(crate) const MAIN_TABS: [Tab; 8] = [Tab::Media, Tab::Mixer, Tab::Clock, Tab::Timer, Tab::Tasks, Tab::Apps, Tab::Shelf, Tab::Clipboard];
+pub(crate) const MAIN_TABS: [Tab; 9] = [Tab::Media, Tab::Mixer, Tab::Clock, Tab::Timer, Tab::Tasks, Tab::Shelf, Tab::Clipboard, Tab::Controls, Tab::Apps];
+
+/// The pages in four groups. In the tab bar a group is one unit: closed it is one icon, chosen it opens to show its
+/// pages, and the page you are on shows its name.
+pub(crate) const GROUPS: [(&str, &[Tab]); 4] = [
+    ("Media", &[Tab::Media, Tab::Mixer]),
+    ("Time", &[Tab::Clock, Tab::Timer, Tab::Tasks]),
+    ("Shelf", &[Tab::Shelf, Tab::Clipboard]),
+    ("System", &[Tab::Controls, Tab::Apps]),
+];
+
+pub(crate) fn group_of(t: Tab) -> Option<usize> {
+    GROUPS.iter().position(|(_, pages)| pages.contains(&t))
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -162,6 +175,8 @@ pub(crate) struct Notch {
     tab: Tab,
     prev_tab: Tab,
     tab_at: Instant,
+    /// The page last open in each group, which a closed group returns to when it is clicked.
+    group_last: [Tab; 4],
     w: Spring,
     h: Spring,
     /// OS window size; only changes when a transition starts or ends, never per frame.
@@ -270,6 +285,7 @@ impl Notch {
             tab: Tab::Media,
             prev_tab: Tab::Media,
             tab_at: Instant::now() - Duration::from_secs(1),
+            group_last: [Tab::Media, Tab::Clock, Tab::Shelf, Tab::Controls],
             w: Spring { x: PILL_W, v: 0.0 },
             h: Spring { x: PILL_H, v: 0.0 },
             win: Vec2::ZERO,
@@ -994,6 +1010,9 @@ impl eframe::App for Notch {
 
         if self.tab != self.prev_tab {
             self.prev_tab = self.tab;
+            if let Some(g) = group_of(self.tab) {
+                self.group_last[g] = self.tab;
+            }
             self.tab_at = now;
             (self.apps, self.startups, self.apps_scroll, self.timer_edit) = (None, None, 0, None);
             if self.tab == Tab::Settings {
