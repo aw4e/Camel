@@ -17,8 +17,8 @@ pub struct Settings {
     pub key_toasts: bool,
     pub device_toasts: bool,
     pub minimal: bool,
-    /// Show the temperature and humidity of where you are on the Clock page. Off until asked for: it contacts a weather
-    /// service with your rounded location.
+    /// Show the temperature and humidity of where you are on the Clock page. It contacts a weather service with your
+    /// rounded location, so it can be switched off.
     pub weather: bool,
     /// A city to use instead of the Windows location.
     pub city: String,
@@ -40,7 +40,7 @@ impl Default for Settings {
             key_toasts: true,
             device_toasts: true,
             minimal: false,
-            weather: false,
+            weather: true,
             city: String::new(),
         }
     }
