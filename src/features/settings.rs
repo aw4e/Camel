@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// Bumped when a default changes in a way that should reach files that already exist.
+const VERSION: u32 = 2;
+
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(default)]
 pub struct Settings {
@@ -22,6 +25,9 @@ pub struct Settings {
     pub weather: bool,
     /// A city to use instead of the Windows location.
     pub city: String,
+    /// Which version of the defaults this file was written for; a file without one is older than any version.
+    #[serde(default)]
+    pub version: u32,
 }
 
 impl Default for Settings {
@@ -42,6 +48,7 @@ impl Default for Settings {
             minimal: false,
             weather: true,
             city: String::new(),
+            version: VERSION,
         }
     }
 }
@@ -53,7 +60,22 @@ fn path() -> PathBuf {
 
 impl Settings {
     pub fn load() -> Self {
-        std::fs::read_to_string(path()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+        let Some(mut s) = std::fs::read_to_string(path()).ok().and_then(|s| serde_json::from_str::<Self>(&s).ok()) else { return Self::default() };
+        if s.migrate() {
+            s.save();
+        }
+        s
+    }
+
+    /// Brings a settings file from before a default changed up to date. A file from before the weather was switched on by
+    /// default carries `weather: false` that nobody chose, so it is turned on once. Returns whether anything changed.
+    fn migrate(&mut self) -> bool {
+        if self.version >= VERSION {
+            return false;
+        }
+        self.weather = true;
+        self.version = VERSION;
+        true
     }
 
     pub fn save(&self) {
@@ -144,5 +166,15 @@ mod tests {
         assert!(x.contains("<RunLevel>HighestAvailable</RunLevel>"));
         assert!(x.contains("<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>"));
         assert!(x.contains(r"<Command>C:\Tom &amp; Jerry\camel.exe</Command>"));
+    }
+
+    #[test]
+    fn an_old_file_gets_the_weather_default_once() {
+        let mut old: Settings = serde_json::from_str(r#"{"lyrics":true,"weather":false}"#).unwrap();
+        assert_eq!(old.version, 0, "a file without a version is older than any version");
+        assert!(old.migrate() && old.weather && old.version == VERSION);
+        old.weather = false;
+        assert!(!old.migrate() && !old.weather, "after that the choice is the user's");
+        assert!(Settings::default().weather && Settings::default().version == VERSION);
     }
 }

@@ -47,8 +47,16 @@ impl Notch {
             let galley = p.layout_no_wrap(text, bold(12.0), fade(color, a));
             let half_w = galley.size().x / 2.0;
             p.galley(pos2(c.x - half_w, c.y - galley.size().y / 2.0), galley, color);
+            // left of the clock: the temperature, then the keep-awake sun
+            let mut left = c.x - half_w - 8.0;
+            if let crate::weather::Status::Ready(w) = self.weather.status() {
+                let temp = p.layout_no_wrap(format!("{:.0}°", w.temp), font(11.0), fade(GRAY, a));
+                let width = temp.size().x;
+                p.galley(pos2(left - width, c.y - temp.size().y / 2.0), temp, GRAY);
+                left -= width + 6.0;
+            }
             if self.awake {
-                let sun = pos2(c.x - half_w - 12.0, c.y);
+                let sun = pos2(left - 4.0, c.y);
                 ui::scaled(&p, sun, 0.6, || ui::icon_sun(&p, sun, fade(Color32::from_rgb(255, 214, 10), a)));
             }
             // a ring beside the clock: the session while the timer runs, otherwise the battery

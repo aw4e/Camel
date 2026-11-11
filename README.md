@@ -102,7 +102,7 @@ page has three groups, chosen with the chips at the top:
 | **Updates** | Checks GitHub for a newer release and installs it when you ask. |
 | **Tasks** | A page with a field to add a reminder or to-do and the list of what is pending; click the circle to tick one off. Also from Spotlight with `remind` and `todo`. A toast and a beep when one is due. |
 | **Controls** | The Controls page, in the System group, has quick tiles: Wi-Fi, Bluetooth, microphone mute, sound mute, keep awake and weather. A lit tile is on; click to flip it. |
-| **Weather** | Temperature, humidity and the weather where you are, at the top right of the Clock page. On by default; switch it off with the Weather tile, or `weather` in Spotlight. |
+| **Weather** | Temperature next to the clock in the closed notch, and temperature, humidity and the weather where you are at the top right of the Clock page. On by default; switch it off with the Weather tile, or `weather` in Spotlight. |
 | **Alerts** | Notices for Caps Lock, keyboard language, losing or regaining internet and a new audio output. |
 | **Minimal notch** | A tray option that shrinks the closed notch to a thin line, for screens with thick top bezels. |
 | **Tray icon** | Keep awake, Minimal notch, Settings and Quit. |
