@@ -27,10 +27,15 @@ pub struct Settings {
     pub city: String,
     /// Apps the user moved to another mixer channel, by lowercase app name.
     pub channel_overrides: std::collections::HashMap<String, usize>,
+    /// Seconds the user shifted the lyrics of a track by (Shift+click on a line), by lowercase "artist\ntitle".
+    pub lyric_offsets: std::collections::HashMap<String, f64>,
     /// Which version of the defaults this file was written for; a file without one is older than any version.
     #[serde(default)]
     pub version: u32,
 }
+
+/// Tracks whose lyric shift is remembered; the file does not grow without end.
+const MAX_LYRIC_OFFSETS: usize = 300;
 
 impl Default for Settings {
     fn default() -> Self {
@@ -51,6 +56,7 @@ impl Default for Settings {
             weather: true,
             city: String::new(),
             channel_overrides: Default::default(),
+            lyric_offsets: Default::default(),
             version: VERSION,
         }
     }
@@ -79,6 +85,24 @@ impl Settings {
         self.weather = true;
         self.version = VERSION;
         true
+    }
+
+    /// The remembered lyric shift of a track, 0 when there is none.
+    pub fn lyric_offset(&self, track: &str) -> f64 {
+        self.lyric_offsets.get(&track.to_lowercase()).copied().unwrap_or(0.0)
+    }
+
+    /// Remembers the lyric shift of a track; a shift under a tenth of a second is no shift and is forgotten.
+    pub fn set_lyric_offset(&mut self, track: &str, seconds: f64) {
+        let key = track.to_lowercase();
+        if seconds.abs() < 0.1 {
+            self.lyric_offsets.remove(&key);
+            return;
+        }
+        if self.lyric_offsets.len() >= MAX_LYRIC_OFFSETS && !self.lyric_offsets.contains_key(&key) {
+            self.lyric_offsets.clear(); // shortcut: forgets all, not the oldest; a map has no order, and 300 tracks is a lot of nudging
+        }
+        self.lyric_offsets.insert(key, seconds);
     }
 
     pub fn save(&self) {
@@ -169,6 +193,22 @@ mod tests {
         assert!(x.contains("<RunLevel>HighestAvailable</RunLevel>"));
         assert!(x.contains("<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>"));
         assert!(x.contains(r"<Command>C:\Tom &amp; Jerry\camel.exe</Command>"));
+    }
+
+    #[test]
+    fn a_lyric_shift_is_remembered_per_track_and_bounded() {
+        let mut s = Settings::default();
+        assert_eq!(s.lyric_offset("A\nSong"), 0.0);
+        s.set_lyric_offset("A\nSong", -2.5);
+        assert_eq!(s.lyric_offset("a\nsong"), -2.5, "case does not matter");
+        s.set_lyric_offset("A\nSong", 0.05);
+        assert!(s.lyric_offsets.is_empty(), "a shift of nothing is forgotten");
+        for i in 0..=MAX_LYRIC_OFFSETS {
+            s.set_lyric_offset(&format!("t{i}"), 1.0);
+        }
+        assert!(s.lyric_offsets.len() <= MAX_LYRIC_OFFSETS && s.lyric_offset(&format!("t{MAX_LYRIC_OFFSETS}")) == 1.0);
+        let old: Settings = serde_json::from_str(r#"{"lyrics":true}"#).unwrap();
+        assert!(old.lyric_offsets.is_empty(), "a file from before this existed still loads");
     }
 
     #[test]

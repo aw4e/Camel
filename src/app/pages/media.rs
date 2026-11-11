@@ -101,8 +101,8 @@ impl Notch {
             m.artist, m.title
         );
         if self.lyric_track != track {
+            self.lyric_offset = self.settings.lyric_offset(&track);
             self.lyric_track = track;
-            self.lyric_offset = 0.0;
         }
         let pos = video - self.lyric_offset;
         const LINE_H: f32 = 24.0;
@@ -135,6 +135,8 @@ impl Notch {
             if resp.clicked() {
                 if dur > 0.0 && ui.input(|i| i.modifiers.shift) {
                     self.lyric_offset = video - *start;
+                    self.settings.set_lyric_offset(&self.lyric_track, self.lyric_offset);
+                    self.settings.save();
                 } else {
                     self.media.send(media::Cmd::Seek(*start + self.lyric_offset));
                 }

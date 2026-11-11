@@ -111,7 +111,7 @@ page has three groups, chosen with the chips at the top:
 
 **Lyrics.** When lyrics are found, a lyrics button appears at the right of the media page. It swaps the player for a
 scrolling view: the current line is large and white, the lines around it fade out, and clicking a line jumps there. If the lyrics run early or late (a music video with an intro, for example), **Shift+click** the line you hear to line
-them up. Names
+them up; Camel remembers the shift for that track. Names
 that YouTube reports (`Artist - Song (Official Video)`, `Artist - Topic`, `ArtistVEVO`) are cleaned and
 searched several ways, and a result is only used when its title and length match. A player that reports no timeline (some
 browsers) gets an estimated position, counted from the start of the track: click the line you hear to sync it.
