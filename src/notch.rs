@@ -5,7 +5,7 @@ mod tabs;
 use crate::platform::{self, HOTKEY_PRESSED, Tray};
 use crate::prelude::*;
 use crate::settings::{self, Settings};
-use crate::{actions, apps, clipboard, focus, media, mixer, monitor, notes, spotlight, system, update};
+use crate::{actions, apps, clipboard, focus, media, mixer, monitor, notes, reminders, spotlight, system, update};
 use chrono::Local;
 use global_hotkey::GlobalHotKeyManager;
 use global_hotkey::hotkey::HotKey;
@@ -210,6 +210,9 @@ pub(crate) struct Notch {
     lyric_offset: f64,
     lyric_track: String,
     updater: update::Updater,
+    reminders: reminders::Reminders,
+    /// The reminder that fired last, for Snooze.
+    last_fired: Option<reminders::Reminder>,
     /// The player shown last, to say so when it changes.
     source: String,
     launched: Instant,
@@ -296,6 +299,8 @@ impl Notch {
             lyric_offset: 0.0,
             lyric_track: String::new(),
             updater: update::Updater::new(),
+            reminders: reminders::Reminders::load(),
+            last_fired: None,
             source: String::new(),
             launched: Instant::now(),
             update_at: None,
@@ -375,6 +380,24 @@ impl Notch {
                 }
             }
             Update => self.update_action(),
+            Remind(spec) => {
+                let when = reminders::describe(spec.due, spec.every, Local::now());
+                let text = spec.text.clone();
+                self.reminders.add(spec);
+                self.show_toast(ToastIcon::Timer, &format!("Reminder set, {when}"), shorten(&text, 40));
+            }
+            Done(id) => {
+                self.reminders.remove(id);
+                self.show_toast(ToastIcon::Timer, "Ticked off", "Reminder removed".to_owned());
+            }
+            Snooze => match self.last_fired.clone() {
+                Some(r) => {
+                    let spec = reminders::Spec { text: r.text.clone(), due: Some(Local::now().timestamp() + 600), every: None };
+                    self.reminders.add(spec);
+                    self.show_toast(ToastIcon::Timer, "Snoozed for 10 minutes", shorten(&r.text, 40));
+                }
+                None => self.show_toast(ToastIcon::Timer, "Nothing to snooze", "No reminder has fired yet".to_owned()),
+            },
             OpenNotes => {
                 let file = notes::path();
                 if !file.exists() {
@@ -609,6 +632,17 @@ impl Notch {
         }
     }
 
+    fn poll_reminders(&mut self) {
+        for r in self.reminders.take_due(Local::now().timestamp()) {
+            self.show_toast(ToastIcon::Timer, &r.text.chars().take(40).collect::<String>(), "Reminder. Type snooze for 10 more minutes".to_owned());
+            if let Some(t) = &mut self.toast {
+                t.until = Instant::now() + Duration::from_secs(10);
+            }
+            monitor::beep();
+            self.last_fired = Some(r);
+        }
+    }
+
     fn poll_focus(&mut self) {
         if !self.focus.tick(Instant::now()) {
             return;
@@ -805,6 +839,7 @@ impl eframe::App for Notch {
         self.poll_focus();
         self.poll_battery();
         self.poll_system();
+        self.poll_reminders();
         self.poll_update(ctx);
     }
 

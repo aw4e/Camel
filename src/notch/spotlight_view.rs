@@ -51,7 +51,7 @@ impl Notch {
             resp.request_focus();
         }
         if query != self.spot.query {
-            self.spot.hits = spotlight::search(&self.index, &query, self.awake);
+            self.spot.hits = spotlight::search(&self.index, &query, self.awake, &self.reminders.list());
             self.spot.armed = None;
             self.spot.sel = 0;
         }
@@ -128,5 +128,7 @@ fn action_style(a: &actions::Action) -> (Color32, fn(&egui::Painter, egui::Pos2,
         Mute(true) => (RED, ui::icon_mic),
         Note(_) | OpenNotes => (ORANGE, ui::icon_clipboard),
         Update => (GREEN, ui::icon_app),
+        Remind(_) | Snooze => (ORANGE, ui::icon_timer),
+        Done(_) => (GREEN, ui::icon_timer),
     }
 }

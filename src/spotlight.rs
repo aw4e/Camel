@@ -87,7 +87,7 @@ fn walk(dir: &Path, depth: u32, apps: bool, out: &mut Vec<Entry>) {
 }
 
 /// `awake` is the keep-awake state, so its row can offer to turn it off.
-pub fn search(index: &Index, query: &str, awake: bool) -> Vec<Hit> {
+pub fn search(index: &Index, query: &str, awake: bool, pending: &[crate::reminders::Reminder]) -> Vec<Hit> {
     let q = query.trim().to_lowercase();
     if q.is_empty() {
         return Vec::new();
@@ -99,7 +99,7 @@ pub fn search(index: &Index, query: &str, awake: bool) -> Vec<Hit> {
     if let Some((title, detail)) = crate::actions::convert(query) {
         hits.push(Hit { action: None, kind: Kind::Calc, title, detail, path: PathBuf::new() });
     }
-    for s in crate::actions::suggest(query, awake) {
+    for s in crate::actions::suggest(query, awake, pending) {
         hits.push(Hit { action: Some(s.action), kind: Kind::Action, title: s.title, detail: s.detail, path: PathBuf::new() });
     }
     let mut scored: Vec<(u8, &Entry)> = Vec::new();

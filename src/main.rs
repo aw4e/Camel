@@ -13,6 +13,7 @@ mod notch;
 mod notes;
 mod platform;
 mod prelude;
+mod reminders;
 mod settings;
 mod spotlight;
 mod system;

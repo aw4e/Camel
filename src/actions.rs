@@ -16,6 +16,12 @@ pub enum Action {
     /// Save a quick note.
     Note(String),
     OpenNotes,
+    /// Add a reminder or to-do.
+    Remind(crate::reminders::Spec),
+    /// Tick a reminder off by id.
+    Done(u64),
+    /// Ask again about the last reminder in ten minutes.
+    Snooze,
     /// Check for a newer version, or install the one that was found.
     Update,
     Timer(Duration),
@@ -133,7 +139,7 @@ fn keyword_match(q: &str) -> Option<&'static str> {
 }
 
 /// Rows to offer for what has been typed. `awake` is the current keep-awake state, so the row can say "off".
-pub fn suggest(query: &str, awake: bool) -> Vec<Suggestion> {
+pub fn suggest(query: &str, awake: bool, pending: &[crate::reminders::Reminder]) -> Vec<Suggestion> {
     let q = query.trim().to_lowercase();
     let mut out = Vec::new();
     let mut add = |action: Action, title: &str, detail: &str| out.push(Suggestion { action, title: title.to_owned(), detail: detail.to_owned() });
@@ -142,6 +148,20 @@ pub fn suggest(query: &str, awake: bool) -> Vec<Suggestion> {
         if let Some(d) = crate::focus::parse_spoken(rest) {
             add(Action::Timer(d), &format!("Start a {} timer", format_duration(d)), "Focus timer");
         }
+    } else if let Some(rest) = ["remind ", "todo ", "task "].iter().find(|p| q.starts_with(**p)).and_then(|p| query.trim().get(p.len()..)) {
+        let now = chrono::Local::now();
+        if let Some(spec) = crate::reminders::parse(rest, now) {
+            let detail = crate::reminders::describe(spec.due, spec.every, now);
+            let title = format!("Remind: {}", spec.text);
+            add(Action::Remind(spec), &title, &detail);
+        }
+    } else if matches!(q.as_str(), "remind" | "reminders" | "todo" | "todos" | "task" | "tasks") {
+        let now = chrono::Local::now();
+        for r in pending.iter().take(5) {
+            add(Action::Done(r.id), &r.text, &format!("{} · Enter to tick off", crate::reminders::describe(r.due, r.every, now)));
+        }
+    } else if q == "snooze" {
+        add(Action::Snooze, "Snooze the last reminder", "Ask again in 10 minutes");
     } else if let Some(text) = query.trim().get(5..).filter(|_| q.starts_with("note ")).map(str::trim).filter(|t| !t.is_empty()) {
         add(Action::Note(text.to_owned()), "Save note", text);
     } else if let Some(name) = q.strip_prefix("kill ").or_else(|| q.strip_prefix("quit ")) {
@@ -292,7 +312,7 @@ mod tests {
 
     #[test]
     fn suggests_actions_from_keywords() {
-        let one = |q: &str| suggest(q, false).into_iter().next().map(|s| s.action);
+        let one = |q: &str| suggest(q, false, &[]).into_iter().next().map(|s| s.action);
         assert_eq!(one("lock"), Some(Action::Lock));
         assert_eq!(one("shu"), Some(Action::Shutdown));
         assert_eq!(one("Shut Down"), Some(Action::Shutdown));
@@ -303,6 +323,13 @@ mod tests {
         assert_eq!(one("mic"), Some(Action::Mute(true)));
         assert_eq!(one("mute mic"), Some(Action::Mute(true)));
         assert_eq!(one("notes"), Some(Action::OpenNotes));
+        assert!(matches!(one("remind 15m stretch"), Some(Action::Remind(spec)) if spec.text == "stretch"));
+        assert!(matches!(one("TODO Buy Milk"), Some(Action::Remind(spec)) if spec.text == "Buy Milk" && spec.due.is_none()));
+        assert_eq!(one("remind 15m"), None, "a reminder needs text");
+        assert_eq!(one("snooze"), Some(Action::Snooze));
+        let pending = [crate::reminders::Reminder { id: 7, text: "call mom".into(), due: None, every: None }];
+        let listed = suggest("todo", false, &pending);
+        assert_eq!((listed.len(), &listed[0].action), (1, &Action::Done(7)));
         assert_eq!(one("check for updates"), Some(Action::Update));
         assert_eq!(one("version"), Some(Action::Update));
         assert_eq!(one("note Buy  Milk "), Some(Action::Note("Buy  Milk".into())));
@@ -310,17 +337,17 @@ mod tests {
         // two letters are too little, and unrelated words match nothing
         assert_eq!(one("sl"), None);
         assert_eq!(one("firefox"), None);
-        assert_eq!(suggest("awake", true)[0].title, "Let this PC sleep again");
-        assert_eq!(suggest("awake", false)[0].title, "Keep this PC awake");
+        assert_eq!(suggest("awake", true, &[])[0].title, "Let this PC sleep again");
+        assert_eq!(suggest("awake", false, &[])[0].title, "Keep this PC awake");
     }
 
     #[test]
     fn timer_rows_parse_the_time() {
-        let s = suggest("timer 10m", false);
+        let s = suggest("timer 10m", false, &[]);
         assert_eq!(s[0].action, Action::Timer(secs(600)));
         assert_eq!(s[0].title, "Start a 10 min timer");
-        assert_eq!(suggest("focus 1h30m", false)[0].action, Action::Timer(secs(5400)));
-        assert!(suggest("timer soon", false).is_empty());
+        assert_eq!(suggest("focus 1h30m", false, &[])[0].action, Action::Timer(secs(5400)));
+        assert!(suggest("timer soon", false, &[]).is_empty());
     }
 
     #[test]
@@ -339,7 +366,7 @@ mod tests {
         assert_eq!(count_processes("camel"), 0);
         assert_eq!(count_processes("svchost.exe"), 0);
         assert_eq!(count_processes("x"), 0); // one letter would match far too much
-        assert!(suggest("kill explorer", false).is_empty());
+        assert!(suggest("kill explorer", false, &[]).is_empty());
     }
 
     #[test]
