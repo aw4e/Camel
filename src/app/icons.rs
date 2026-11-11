@@ -237,6 +237,25 @@ pub fn icon_sun(p: &Painter, c: Pos2, col: Color32) {
     }
 }
 
+/// A closed hand, the "grab" cursor Windows does not have. `c` is the middle of the fist; `edge` outlines it so it shows on
+/// any background.
+pub fn icon_grab(p: &Painter, c: Pos2, fill: Color32, edge: Color32) {
+    // four knuckles along the top, the palm under them and the thumb on the side
+    let knuckles = [-5.4f32, -1.8, 1.8, 5.4];
+    for (grow, col) in [(1.1, edge), (0.0, fill)] {
+        let palm = Rect::from_center_size(c + vec2(0.0, 2.6), vec2(15.0 + 2.0 * grow, 8.0 + 2.0 * grow));
+        p.rect_filled(palm, 3.6 + grow, col);
+        for x in knuckles {
+            p.circle_filled(c + vec2(x, -2.4), 2.1 + grow, col);
+        }
+        p.circle_filled(c + vec2(-8.2, 2.2), 2.3 + grow, col);
+    }
+    // the creases between the fingers
+    for x in [-3.6, 0.0, 3.6] {
+        seg(p, c, (x, -3.0), (x, -0.6), 0.9, edge);
+    }
+}
+
 pub fn icon_close(p: &Painter, c: Pos2, col: Color32) {
     seg(p, c, (-4.5, -4.5), (4.5, 4.5), W, col);
     seg(p, c, (-4.5, 4.5), (4.5, -4.5), W, col);

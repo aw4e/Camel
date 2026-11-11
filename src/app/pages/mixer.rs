@@ -154,7 +154,7 @@ impl Notch {
             self.mixer_drag = Some(drag);
         }
         if let Some((key, name)) = self.mixer_drag.clone() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand); // the hand all the way to the drop
+            ui.ctx().set_cursor_icon(egui::CursorIcon::None); // a grabbing hand is drawn instead, holding the name
             let pointer = ui.input(|i| i.pointer.latest_pos());
             // the strips are the channels; the master strip takes no apps
             let target = pointer.and_then(|pt| cards.iter().take(channels::NAMES.len()).position(|c| c.contains(pt)));
@@ -163,15 +163,15 @@ impl Notch {
             }
             if let Some(pt) = pointer {
                 let galley = p.layout_no_wrap(shorten(&name, 16), bold(10.5), fade(Color32::WHITE, a));
-                // the chip trembles while it is held, until it is dropped
+                // the name hangs from the hand, which trembles while it holds it, until it is dropped
                 let t = ui.input(|i| i.time) as f32;
-                let shake = if self.reduce_motion { Vec2::ZERO } else { vec2((t * 40.0).sin() * 1.4, (t * 53.0).cos() * 1.0) };
-                // below the hand, and never lower than the window
+                let shake = if self.reduce_motion { Vec2::ZERO } else { vec2((t * 40.0).sin() * 1.2, (t * 53.0).cos() * 0.9) };
                 let size = galley.size() + vec2(14.0, 6.0);
-                let centre = pt + vec2(6.0, 15.0) + shake;
-                let chip = Rect::from_center_size(pos2(centre.x, centre.y.min(o.y + MIXER_H - size.y / 2.0 - 2.0)), size);
+                let hand = pt + shake;
+                let chip = Rect::from_center_size(pos2(hand.x, (hand.y + 14.0).min(o.y + MIXER_H - size.y / 2.0 - 2.0)), size);
                 p.rect_filled(chip, chip.height() / 2.0, fade(fill(44), a));
                 p.galley(chip.center() - galley.size() / 2.0, galley, Color32::WHITE);
+                ui::icon_grab(&p, hand, fade(Color32::WHITE, a), fade(Color32::from_gray(20), a));
             }
             if ui.input(|i| i.pointer.any_down()) {
                 ui.ctx().request_repaint();
