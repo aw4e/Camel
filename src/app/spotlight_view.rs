@@ -50,10 +50,14 @@ impl Notch {
         if !resp.has_focus() {
             resp.request_focus();
         }
-        if query != self.spot.query {
+        let typed = query != self.spot.query;
+        if typed || self.spot.rates_version != crate::rates::version() {
+            self.spot.rates_version = crate::rates::version();
             self.spot.hits = spotlight::search(&self.index, &query, self.awake, &self.reminders.list());
-            self.spot.armed = None;
-            self.spot.sel = 0;
+            if typed {
+                self.spot.armed = None;
+                self.spot.sel = 0;
+            }
         }
         self.spot.query = query;
 

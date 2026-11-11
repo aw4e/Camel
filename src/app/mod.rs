@@ -166,6 +166,8 @@ struct Spot {
     hits: Vec<spotlight::Hit>,
     /// Row that asked for a second Enter (restart, shut down, sign out, quit a program).
     armed: Option<usize>,
+    /// The exchange-rate version the rows were made with; when new rates arrive the search runs again.
+    rates_version: u32,
 }
 
 pub(crate) struct Notch {

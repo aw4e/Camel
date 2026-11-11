@@ -172,6 +172,7 @@ web with DuckDuckGo.
 | `awake`, `caffeine` | Turns keep awake on or off. |
 | `timer 10m`, `focus 1h30m`, `timer 25` | Starts the focus timer at that length. Accepts `10m`, `90s`, `1h30m`, `25`, `25:30`. |
 | `remind 15m stretch`, `remind every 45m drink water`, `todo buy milk` | Adds a reminder or a to-do. `todo` lists them and Enter ticks one off, `snooze` repeats the last one in 10 minutes. |
+| `100 usd to idr`, `$50 in rupiah`, `rp 1.500.000 to usd`, `2jt idr usd` | Converts money. `100 usd` alone converts to your region's currency. Amounts may be written 15.000, 1,5 or 1.234,56, with `k`, `rb` or `jt` after them. About 30 currencies from the European Central Bank, updated daily. Enter copies the result. |
 | `time tokyo`, `time in new york` | The time in another city, with the gap from here. About 40 cities; daylight saving comes from Windows. Enter copies it. |
 | `until 25 dec`, `days until 2026-12-25` | The days left to a date. Enter copies it. |
 | `weather`, `city bandung` | Switches the weather on or off, or uses a city instead of the Windows location. |
@@ -184,15 +185,16 @@ web with DuckDuckGo.
 
 ## Privacy and security
 
-**Network.** Camel makes three kinds of request, and each can be turned off:
+**Network.** Camel makes four kinds of request:
 
 | Request | When | What it sends |
 |---|---|---|
 | lrclib.net | **Synced lyrics** is on and a track plays | The artist, track title and duration. |
 | api.open-meteo.com | **Weather** is on | Your location rounded to about a kilometre (from Windows location, or geocoded from the city you typed, which sends that city name to geocoding-api.open-meteo.com). |
+| api.frankfurter.dev | You type a money question in Spotlight | A request for the latest exchange rates, kept for six hours. Nothing about you is sent. |
 | api.github.com and github.com | **Check for updates** is on, or you ask for an update | A request for the latest release of this repository, which reveals your IP address and nothing else of yours. |
 
-With all three off, Camel makes no network requests. The web row in Spotlight only opens your browser when you pick it.
+Lyrics, weather and update checks can each be switched off, and the exchange rates are only fetched when you type a money question, so with those three off and no money questions Camel makes no network requests. The web row in Spotlight only opens your browser when you pick it.
 
 **Local data.** Clipboard history lives in memory and disappears when Camel quits. Turn **Clipboard history** off and
 Camel stops reading the clipboard altogether. Settings, notes and the uninstall record live in `%APPDATA%\Camel`.
@@ -277,12 +279,14 @@ src/services/                what talks to Windows or the network
     mixer.rs  monitor.rs     WASAPI volume and mute, battery, CPU/RAM, mic/camera, clipboard, memory trim
     system.rs  radios.rs     clock format, keyboard, network, audio output; Wi-Fi and Bluetooth
     weather.rs  update.rs    Open-Meteo weather, release check with a verified download
+    rates.rs                 exchange rates from the European Central Bank
     platform.rs              tray, hotkey, fonts, window frame, elevation
 src/features/                logic that needs no window
     actions.rs  spotlight.rs Spotlight actions and search, calculator, unit conversion
     apps.rs  clipboard.rs    installed programs and uninstall, clipboard history and pins
     focus.rs  reminders.rs   focus timer and rounds, reminders and to-dos
     notes.rs  worldtime.rs   quick notes, time in other cities and days to a date
+    currency.rs              money questions: reading amounts, converting, formatting
     settings.rs              settings file and autostart
 ```
 

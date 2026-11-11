@@ -96,7 +96,7 @@ pub fn search(index: &Index, query: &str, awake: bool, pending: &[crate::reminde
     if let Some(v) = calc(&q) {
         hits.push(Hit { action: None, kind: Kind::Calc, title: fmt_num(v), detail: format!("{query} ="), path: PathBuf::new() });
     }
-    if let Some((title, detail)) = crate::actions::convert(query).or_else(|| crate::worldtime::answer(query)) {
+    if let Some((title, detail)) = crate::actions::convert(query).or_else(|| crate::worldtime::answer(query)).or_else(|| crate::currency::answer(query)) {
         hits.push(Hit { action: None, kind: Kind::Calc, title, detail, path: PathBuf::new() });
     }
     for s in crate::actions::suggest(query, awake, pending) {
