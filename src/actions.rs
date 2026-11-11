@@ -97,7 +97,7 @@ pub fn kill(prefix: &str) -> usize {
 /// `shutdown.exe` does the work, so Camel needs no shutdown privilege of its own.
 pub fn power(flag: &str) {
     use std::os::windows::process::CommandExt;
-    let mut c = std::process::Command::new("shutdown");
+    let mut c = std::process::Command::new(crate::platform::system_tool("shutdown.exe"));
     c.arg(flag);
     if flag != "/l" {
         c.args(["/t", "0"]);

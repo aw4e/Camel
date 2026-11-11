@@ -58,7 +58,7 @@ const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
 fn schtasks(args: &[&str]) -> bool {
     use std::os::windows::process::CommandExt;
-    std::process::Command::new("schtasks").args(args).creation_flags(0x0800_0000).output().is_ok_and(|o| o.status.success())
+    std::process::Command::new(crate::platform::system_tool("schtasks.exe")).args(args).creation_flags(0x0800_0000).output().is_ok_and(|o| o.status.success())
 }
 
 /// The real state, not the saved setting: a task or a `Run` entry exists.

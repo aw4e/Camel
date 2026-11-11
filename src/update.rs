@@ -239,6 +239,11 @@ impl Updater {
                 let staged = sibling(&exe, ".new");
                 download(&release, &staged)?;
                 swap(&exe, &staged).map_err(|e| format!("cannot replace the program: {e}"))?;
+                // someone with write access to the folder could have replaced the file between the check and the swap
+                if !verify(&exe, &release.sha256) {
+                    let _ = std::fs::rename(sibling(&exe, ".old"), &exe);
+                    return Err("the installed file does not match its checksum, kept the old version".to_owned());
+                }
                 if relaunch(&exe) { Ok(()) } else { Err("updated, restart Camel to use it".to_owned()) }
             })();
             match result {

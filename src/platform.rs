@@ -7,6 +7,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tray_icon::menu::{CheckMenuItem, Menu, MenuId, MenuItem};
 use tray_icon::{TrayIcon, TrayIconBuilder};
 
+/// A Windows tool by absolute path. Camel runs elevated, and a program started by bare name is looked up in Camel's own
+/// folder first, where a file dropped by a less privileged process would win.
+pub(crate) fn system_tool(name: &str) -> PathBuf {
+    let root = std::env::var_os("SystemRoot").map_or_else(|| PathBuf::from(r"C:\Windows"), PathBuf::from);
+    root.join("System32").join(name)
+}
+
 /// Set by the hotkey callback. With an event handler installed the crate's channel stays empty.
 pub(crate) static HOTKEY_PRESSED: AtomicBool = AtomicBool::new(false);
 
@@ -118,5 +125,17 @@ pub(crate) fn ensure_admin() {
     let r = unsafe { ShellExecuteW(None, w!("runas"), &HSTRING::from(exe.as_os_str()), &HSTRING::from(params), None, SW_SHOWNORMAL) };
     if r.0 as isize > 32 {
         std::process::exit(0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn system_tools_resolve_to_real_files_under_system32() {
+        for name in ["shutdown.exe", "schtasks.exe"] {
+            let path = super::system_tool(name);
+            assert!(path.is_absolute() && path.exists(), "{path:?}");
+            assert!(path.to_string_lossy().to_lowercase().contains("system32"));
+        }
     }
 }
