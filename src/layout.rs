@@ -109,8 +109,8 @@ mod tests {
         assert!((TAB_W - TAB_PILL_H * PHI).abs() < 1.0 && TAB_W % 2.0 == 0.0);
         // gaps come from the Fibonacci scale
         assert!([3.0, 5.0, 8.0, 13.0, 21.0, 34.0].contains(&GROUP_GAP));
-        // the bar leaves room for the battery readout and both privacy dots on its right (leftmost at x = 314)
+        // the bar leaves room for the battery readout on its right (leftmost at x = 356)
         let track_right = 12.0 + tab_off(MAIN_TABS.len() - 1) + TAB_W + 2.0 * TAB_INSET;
-        assert!(track_right + 8.0 <= 314.0, "tab bar ends at {track_right}");
+        assert!(track_right + 8.0 <= 356.0, "tab bar ends at {track_right}");
     }
 }

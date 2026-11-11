@@ -283,6 +283,11 @@ pub fn icon_wifi(p: &Painter, c: Pos2, col: Color32) {
     p.circle_filled(at(c, (0.0, 5.5)), 1.3, col);
 }
 
+pub fn icon_tasks(p: &Painter, c: Pos2, col: Color32) {
+    path(p, c, &[(-7.0, -7.0), (7.0, -7.0), (7.0, 7.0), (-7.0, 7.0)], 3.0, true, W, col);
+    path(p, c, &[(-3.6, 0.2), (-1.0, 2.9), (3.8, -2.8)], 0.0, false, W, col);
+}
+
 pub fn icon_search(p: &Painter, c: Pos2, col: Color32) {
     p.circle_stroke(c + vec2(-1.5, -1.5), 6.0, Stroke::new(1.8, col));
     seg(p, c, (2.9, 2.9), (7.8, 7.8), 1.9, col);

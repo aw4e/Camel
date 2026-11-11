@@ -206,15 +206,8 @@ impl Notch {
             let s = &self.monitor.stats;
             let dots = self.settings.privacy_dots && (s.mic || s.cam);
             let mut x = right - 28.0;
-            if let Some(b) = s.battery {
-                ui::battery_gauge(&p, pos2(x - 24.0, o.y + 16.0), b, s.charging, a);
-                p.text(pos2(x - 31.0, o.y + 16.0), Align2::RIGHT_CENTER, format!("{b}%"), bold(12.0), fade(Color32::WHITE, a));
-                x -= 76.0;
-            } else if !dots {
-                // the wider tab bar leaves no room for both the load readout and the privacy dots
-                p.text(pos2(x, o.y + 16.0), Align2::RIGHT_CENTER, format!("CPU {:.0}%  RAM {:.0}%", s.cpu, s.ram), font(10.5), fade(GRAY, a));
-            }
-            if self.settings.privacy_dots {
+            // eight tabs leave room for the privacy dots or for the readout, not both; the dots win while a mic or camera is on
+            if dots {
                 for (on, col, is_mic) in [(s.mic, GREEN, true), (s.cam, ORANGE, false)] {
                     if on {
                         if is_mic {
@@ -225,6 +218,12 @@ impl Notch {
                         x -= 20.0;
                     }
                 }
+            } else if let Some(b) = s.battery {
+                ui::battery_gauge(&p, pos2(x - 24.0, o.y + 16.0), b, s.charging, a);
+                p.text(pos2(x - 31.0, o.y + 16.0), Align2::RIGHT_CENTER, format!("{b}%"), bold(12.0), fade(Color32::WHITE, a));
+            } else {
+                p.text(pos2(x, o.y + 10.0), Align2::RIGHT_CENTER, format!("CPU {:.0}%", s.cpu), font(9.5), fade(GRAY, a));
+                p.text(pos2(x, o.y + 22.0), Align2::RIGHT_CENTER, format!("RAM {:.0}%", s.ram), font(9.5), fade(GRAY, a));
             }
         }
 
@@ -234,6 +233,7 @@ impl Notch {
             Tab::Clipboard => self.tab_clipboard(ui, o, content),
             Tab::Timer => self.tab_timer(ui, o, content),
             Tab::Apps => self.tab_apps(ui, o, content),
+            Tab::Tasks => self.tab_tasks(ui, o, content),
             Tab::Clock => super::tabs::clock::tab_clock(&p, o, content, self.h24),
             Tab::Mixer => self.tab_mixer(ui, o, content),
             Tab::Settings => self.tab_settings(ui, o, content),

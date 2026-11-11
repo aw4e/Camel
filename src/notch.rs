@@ -18,6 +18,7 @@ use tray_icon::menu::MenuEvent;
 fn tab_icon(t: Tab) -> fn(&egui::Painter, egui::Pos2, Color32) {
     match t {
         Tab::Media => ui::icon_music,
+        Tab::Tasks => ui::icon_tasks,
         Tab::Mixer => ui::icon_speaker,
         Tab::Clock => ui::icon_clock,
         Tab::Timer => ui::icon_timer,
@@ -31,6 +32,7 @@ fn tab_icon(t: Tab) -> fn(&egui::Painter, egui::Pos2, Color32) {
 fn tab_label(t: Tab) -> &'static str {
     match t {
         Tab::Media => "Now playing",
+        Tab::Tasks => "Tasks",
         Tab::Mixer => "Volume mixer",
         Tab::Clock => "Clock",
         Tab::Timer => "Focus timer",
@@ -46,6 +48,7 @@ pub(crate) enum Tab {
     Media,
     Shelf,
     Clipboard,
+    Tasks,
     Clock,
     Timer,
     Mixer,
@@ -53,7 +56,7 @@ pub(crate) enum Tab {
     Settings,
 }
 
-pub(crate) const MAIN_TABS: [Tab; 7] = [Tab::Media, Tab::Mixer, Tab::Clock, Tab::Timer, Tab::Shelf, Tab::Clipboard, Tab::Apps];
+pub(crate) const MAIN_TABS: [Tab; 8] = [Tab::Media, Tab::Mixer, Tab::Clock, Tab::Timer, Tab::Tasks, Tab::Apps, Tab::Shelf, Tab::Clipboard];
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -210,6 +213,9 @@ pub(crate) struct Notch {
     lyric_offset: f64,
     lyric_track: String,
     updater: update::Updater,
+    /// What is being typed into the Tasks page, and how far its list is scrolled.
+    task_input: String,
+    tasks_scroll: usize,
     reminders: reminders::Reminders,
     /// The reminder that fired last, for Snooze.
     last_fired: Option<reminders::Reminder>,
@@ -299,6 +305,8 @@ impl Notch {
             lyric_offset: 0.0,
             lyric_track: String::new(),
             updater: update::Updater::new(),
+            task_input: String::new(),
+            tasks_scroll: 0,
             reminders: reminders::Reminders::load(),
             last_fired: None,
             source: String::new(),
@@ -711,6 +719,9 @@ impl Notch {
             }
             if step != 0 && self.tab == Tab::Timer {
                 self.focus.adjust(step as i64 * 60);
+            }
+            if step != 0 && self.tab == Tab::Tasks {
+                bump(&mut self.tasks_scroll, self.reminders.list().len().saturating_sub(3));
             }
             if step != 0 && self.tab == Tab::Clipboard {
                 bump(&mut self.clip_scroll, self.history.items().len().saturating_sub(3));

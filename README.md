@@ -89,10 +89,10 @@ Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by defau
 | **Volume HUD** | A bar with the level shows in the notch when the master volume or mute changes. It stays quiet while the Mixer page is open. |
 | **Keep awake** | Stops the screen and sleep from turning off. Switch it on from the tray menu or by typing `awake` in Spotlight. A small sun shows in the closed pill while it is on. Off again every time Camel starts. |
 | **Toasts** | A short notice when you copy something, plug in or unplug the charger, or the battery is low. |
-| **Privacy dots** | Green and orange dots while a microphone or camera is in use. |
+| **Privacy dots** | Green and orange dots while a microphone or camera is in use. In the open notch they replace the battery or CPU readout while they show. |
 | **Apps** | Installed programs with a search box: uninstall them, clean up leftovers, and switch startup items on or off. |
 | **Updates** | Checks GitHub for a newer release and installs it when you ask. |
-| **Reminders** | `remind 15m stretch`, `remind every 45m drink water` or `todo buy milk` in Spotlight. A toast and a beep when one is due. |
+| **Tasks** | A page with a field to add a reminder or to-do and the list of what is pending; click the circle to tick one off. Also from Spotlight with `remind` and `todo`. A toast and a beep when one is due. |
 | **Alerts** | Notices for Caps Lock, keyboard language, losing or regaining internet and a new audio output. |
 | **Minimal notch** | A tray option that shrinks the closed notch to a thin line, for screens with thick top bezels. |
 | **Tray icon** | Keep awake, Minimal notch, Settings and Quit. |
@@ -110,10 +110,10 @@ browsers) gets an estimated position, counted from the start of the track: click
 A picture shows a thumbnail, its size and how much memory it takes. Pictures are kept as compressed PNG, 24 MB at most in
 total, and the oldest go first. Nothing is saved to disk, and anything a password manager marks as sensitive is skipped.
 
-**Reminders.** Type `remind` or `todo` in Spotlight, then an optional time and the text: `remind 15m stretch`,
+**Tasks.** On the Tasks page type into the field and press Enter, or type `remind` or `todo` in Spotlight, then an optional time and the text: `remind 15m stretch`,
 `remind 17:30 call mom` (or `5pm`), `remind every 45m drink water` (repeats, at most once a minute) or just `todo buy milk`
 for an item without a time. When one is due it shows as a toast for ten seconds with a beep, and `snooze` asks again in ten
-minutes. Type `todo` to list what is pending; Enter on a row ticks it off. They are saved in `%APPDATA%\Camel\reminders.json`,
+minutes. `todo` in Spotlight lists what is pending, and Enter on a row ticks it off; on the page, click the circle. They are saved in `%APPDATA%\Camel\reminders.json`,
 so they survive a restart. A time like `10:30` means the clock; write `10m30s` for a duration.
 
 **Focus timer.** Click the time and type `30` or `25:30`, use the − and + buttons (5 minutes, or 1 with Shift), scroll over
@@ -244,7 +244,7 @@ if you want that look.
 src/main.rs                  entry point
 src/notch.rs                 app state, input, animation, window sizing
 src/notch/draw.rs            closed pill, toast and the tab bar
-src/notch/tabs/              one file per page: media, mixer, clock, timer, shelf, clipboard, apps, settings
+src/notch/tabs/              one file per page: media, mixer, clock, timer, tasks, shelf, clipboard, apps, settings
 src/notch/spotlight_view.rs  Spotlight panel
 src/layout.rs                golden-ratio and Fibonacci layout tokens, with tests
 src/platform.rs              tray, hotkey, fonts, window frame, elevation
@@ -285,7 +285,7 @@ from them:
   smaller than half size. A 24 px tab pill gets a 14 px icon.
 - **Grouped buttons:** related buttons share one rounded track with segments, like the tab bar. The timer's presets are
   one group and its − and + another, with Reset standing alone. The tab bar itself is grouped in pairs (audio, time,
-  storage, apps).
+  tasks and apps, storage).
 - **Today in the calendar:** the disc behind today is wider than the digits (17 px for two digits) and still clears the
   rows above and below.
 - **Icons:** one drawing language, a 1.5 px stroke with round caps and joins, and rounded corners.
