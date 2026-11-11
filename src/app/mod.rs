@@ -175,6 +175,8 @@ pub(crate) struct Notch {
     tab: Tab,
     prev_tab: Tab,
     tab_at: Instant,
+    /// Which group of switches the Settings page shows.
+    settings_page: usize,
     /// The page last open in each group, which a closed group returns to when it is clicked.
     group_last: [Tab; 4],
     w: Spring,
@@ -285,6 +287,7 @@ impl Notch {
             tab: Tab::Media,
             prev_tab: Tab::Media,
             tab_at: Instant::now() - Duration::from_secs(1),
+            settings_page: 0,
             group_last: [Tab::Media, Tab::Clock, Tab::Shelf, Tab::Controls],
             w: Spring { x: PILL_W, v: 0.0 },
             h: Spring { x: PILL_H, v: 0.0 },
@@ -538,6 +541,9 @@ impl Notch {
         let s = &self.settings;
         if s.always_on_top != before.always_on_top {
             ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(if s.always_on_top { egui::WindowLevel::AlwaysOnTop } else { egui::WindowLevel::Normal }));
+        }
+        if s.weather != before.weather {
+            self.weather.set_enabled(s.weather);
         }
         if s.lyrics != before.lyrics {
             self.media.lyrics.enabled.store(s.lyrics, Ordering::Relaxed);
@@ -813,16 +819,7 @@ impl Notch {
     fn fit_window(&mut self, ctx: &egui::Context, mode: Mode, dt: f32) -> (Vec2, bool) {
         let target = match mode {
             Mode::Spot => vec2(SPOT_W, 52.0 + if self.spot.hits.is_empty() { 0.0 } else { 8.0 + 40.0 * self.spot.hits.len() as f32 }),
-            Mode::Open => vec2(
-                OPEN_W,
-                if self.tab == Tab::Settings {
-                    SETTINGS_H
-                } else if self.tab == Tab::Clock && month_rows(Local::now().date_naive()) > 5 {
-                    OPEN_H + 14.0
-                } else {
-                    OPEN_H
-                },
-            ),
+            Mode::Open => vec2(OPEN_W, if self.tab == Tab::Clock && month_rows(Local::now().date_naive()) > 5 { OPEN_H + 14.0 } else { OPEN_H }),
             Mode::Toast => TOAST,
             Mode::Compact if self.settings.minimal => MINIMAL,
             Mode::Compact => vec2(PILL_W + if self.dots_active() { 30.0 } else { 0.0 }, PILL_H),

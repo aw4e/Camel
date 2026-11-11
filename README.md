@@ -64,23 +64,24 @@ task with `schtasks /Delete /TN Camel /F`.
 - **Alt+Space** opens Spotlight.
 - **Gear icon** opens settings. Quit lives there and in the tray menu.
 
-Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by default except **Start with Windows**. The Settings page
-has two columns, behavior on the left and what Camel shows or announces on the right:
+Settings are saved to `%APPDATA%\Camel\settings.json`. Everything is on by default except **Start with Windows**. The Settings
+page has three groups, chosen with the chips at the top:
 
-| Setting | Effect |
-|---|---|
-| Start with Windows | Starts Camel when you sign in. |
-| Hover to expand | Opens the notch on hover instead of on click. |
-| Always on top | Keeps the notch above other windows. |
-| Hide on fullscreen | Hides the notch while a fullscreen app is running. |
-| Spotlight (Alt+Space) | Enables the launcher and its hotkey. |
-| Check for updates | Looks for a newer release shortly after start and then daily. |
-| Synced lyrics | Fetches lyrics for the current track. |
-| Clipboard history | Records what you copy. Off means Camel never reads the clipboard. |
-| Privacy indicators | Shows dots while a microphone or camera is in use. |
-| Volume HUD | Shows a bar when the master volume or mute changes. |
-| Caps Lock and language | Shows a notice when Caps Lock or the keyboard language changes. |
-| Network and audio alerts | Shows a notice when the internet drops or returns and when the default audio output changes (headphones, Bluetooth speakers). |
+| Group | Setting | Effect |
+|---|---|---|
+| General | Start with Windows | Starts Camel when you sign in. |
+|  | Hover to expand | Opens the notch on hover instead of on click. |
+|  | Always on top | Keeps the notch above other windows. |
+|  | Hide on fullscreen | Hides the notch while a fullscreen app is running. |
+|  | Spotlight (Alt+Space) | Enables the launcher and its hotkey. |
+|  | Check for updates | Looks for a newer release shortly after start and then daily. |
+| Media and data | Synced lyrics | Fetches lyrics for the current track. |
+|  | Weather | Temperature and humidity on the Clock page. |
+|  | Clipboard history | Records what you copy. Off means Camel never reads the clipboard. |
+| Alerts | Privacy indicators | Shows dots while a microphone or camera is in use. |
+|  | Volume HUD | Shows a bar when the master volume or mute changes. |
+|  | Caps Lock and language | Shows a notice when Caps Lock or the keyboard language changes. |
+|  | Network and audio alerts | Shows a notice when the internet drops or returns and when the default audio output changes (headphones, Bluetooth speakers). |
 
 ## Features
 
