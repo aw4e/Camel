@@ -3,40 +3,32 @@
 //! the user moved is remembered by app name. Pure logic; the audio calls live in `services::mixer`.
 
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 pub const NAMES: [&str; 5] = ["System", "Music", "Browser", "Voice", "Game"];
 
-/// Process names (lowercase, without .exe) that belong in a channel. Anything not listed lands in Game.
-const KNOWN: [(usize, &[&str]); 3] = [
-    (1, &["spotify", "vlc", "musicbee", "foobar2000", "itunes", "applemusic", "wmplayer", "tidal", "deezer", "aimp", "winamp", "potplayer", "mpc-hc64", "mpv"]),
-    (2, &["chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "zen", "iexplore", "waterfox", "librewolf", "chromium"]),
-    (
-        3,
-        &[
-            "discord",
-            "discordptb",
-            "discordcanary",
-            "teams",
-            "ms-teams",
-            "zoom",
-            "skype",
-            "telegram",
-            "slack",
-            "whatsapp",
-            "webex",
-            "signal",
-            "mumble",
-            "teamspeak",
-        ],
-    ),
-];
+/// Which app belongs where, as data: `assets/mixer-apps.json`. Anything not listed lands in Game, and hidden apps never show.
+struct Catalog {
+    channels: [Vec<String>; 5],
+    hidden: Vec<String>,
+}
+
+static CATALOG: LazyLock<Catalog> = LazyLock::new(|| parse_catalog(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/mixer-apps.json"))));
+
+fn parse_catalog(json: &str) -> Catalog {
+    let v: serde_json::Value = serde_json::from_str(json).unwrap_or_default();
+    let list = |key: &str| -> Vec<String> { v[key].as_array().into_iter().flatten().filter_map(|x| x.as_str()).map(str::to_lowercase).collect() };
+    Catalog { channels: [list("system"), list("music"), list("browser"), list("voice"), Vec::new()], hidden: list("hidden") }
+}
+
+pub fn is_hidden(app: &str) -> bool {
+    let name = app.to_lowercase();
+    CATALOG.hidden.contains(&name)
+}
 
 pub fn default_channel(app: &str) -> usize {
     let name = app.to_lowercase();
-    if name == "system sounds" {
-        return 0;
-    }
-    KNOWN.iter().find(|(_, apps)| apps.contains(&name.as_str())).map_or(4, |(channel, _)| *channel)
+    CATALOG.channels.iter().position(|apps| apps.contains(&name)).unwrap_or(4)
 }
 
 /// The channel of an app: where the user put it, otherwise where it belongs by default.
@@ -61,10 +53,50 @@ pub struct Strip {
     pub peak: f32,
 }
 
+/// One entry per app name: a browser with many helper processes has many audio sessions, but it is one app. Returns the
+/// first index of each name, in order.
+pub fn one_per_app(indexes: &[usize], name_of: impl Fn(usize) -> String) -> Vec<usize> {
+    let mut seen = Vec::new();
+    indexes
+        .iter()
+        .copied()
+        .filter(|i| {
+            let name = name_of(*i).to_lowercase();
+            let fresh = !seen.contains(&name);
+            seen.push(name);
+            fresh
+        })
+        .collect()
+}
+
+/// A plain text report for a bug report: the output, and every audio session with its channel, level and mute state.
+pub fn report(version: &str, os: &str, output: &str, sessions: &[(&str, usize, f32, bool)], moved: usize) -> String {
+    let mut out = format!(
+        "Camel {version}
+Windows {os}
+Default output: {output}
+Apps you moved to another channel: {moved}
+Audio sessions: {}
+",
+        sessions.len()
+    );
+    for (name, channel, level, muted) in sessions {
+        out.push_str(&format!(
+            "  {name:<24} {:<8} {:>3.0}%{}{}
+",
+            NAMES[*channel % NAMES.len()],
+            level * 100.0,
+            if *muted { "  muted" } else { "" },
+            if is_hidden(name) { "  (hidden)" } else { "" }
+        ));
+    }
+    out
+}
+
 /// One strip per channel from the apps' (name, level, muted, peak).
 pub fn summarize(apps: &[(&str, f32, bool, f32)], moved: &HashMap<String, usize>) -> [Strip; 5] {
     let mut strips: [Strip; 5] = Default::default();
-    for (i, (name, ..)) in apps.iter().enumerate() {
+    for (i, (name, ..)) in apps.iter().enumerate().filter(|(_, (name, ..))| !is_hidden(name)) {
         strips[channel_of(name, moved)].apps.push(i);
     }
     for strip in &mut strips {
@@ -87,6 +119,44 @@ mod tests {
         {
             assert_eq!(default_channel(app), channel, "{app}");
         }
+    }
+
+    #[test]
+    fn the_app_list_is_valid_data_and_hides_helpers() {
+        let all: Vec<&String> = CATALOG.channels.iter().flatten().chain(CATALOG.hidden.iter()).collect();
+        assert!(all.len() > 30, "the shipped list was not read");
+        let mut sorted = all.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), all.len(), "an app is listed twice");
+        assert!(all.iter().all(|a| **a == a.to_lowercase() && !a.ends_with(".exe")));
+        assert!(is_hidden("Camel") && is_hidden("AudioDG") && !is_hidden("spotify"));
+        let apps = [("camel", 1.0, false, 0.5), ("spotify", 1.0, false, 0.2)];
+        let s = summarize(&apps, &HashMap::new());
+        assert_eq!((s[1].apps.clone(), s[4].apps.len()), (vec![1], 0), "a hidden app is in no channel");
+        let broken = parse_catalog("not json");
+        assert!(broken.hidden.is_empty() && broken.channels.iter().all(Vec::is_empty), "bad data means no lists, not a crash");
+    }
+
+    #[test]
+    fn the_report_lists_every_session() {
+        let r = report("1.2.3", "11", "Speakers", &[("spotify", 1, 0.5, false), ("camel", 4, 1.0, true)], 2);
+        assert!(r.starts_with(
+            "Camel 1.2.3
+Windows 11
+Default output: Speakers
+"
+        ));
+        assert!(r.contains("Audio sessions: 2") && r.contains("moved to another channel: 2"));
+        assert!(r.contains("spotify") && r.contains("Music") && r.contains(" 50%"));
+        assert!(r.contains("camel") && r.contains("muted") && r.contains("(hidden)"));
+    }
+
+    #[test]
+    fn many_sessions_of_one_app_count_as_one() {
+        let names = ["Chrome", "chrome", "Discord", "CHROME"];
+        assert_eq!(one_per_app(&[0, 1, 2, 3], |i| names[i].to_owned()), [0, 2]);
+        assert!(one_per_app(&[], |_| String::new()).is_empty());
     }
 
     #[test]

@@ -21,6 +21,7 @@ pub struct AppVolume {
 }
 
 pub struct Mixer {
+    device_id: String,
     endpoint: IAudioEndpointVolume,
     manager: IAudioSessionManager2,
     names: System,
@@ -35,10 +36,16 @@ impl Mixer {
             let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole)?;
             let endpoint = device.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None)?;
             let manager = device.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None)?;
-            let mut m = Self { endpoint, manager, names: System::new(), master: 0.0, apps: Vec::new() };
+            let device_id = device.GetId()?.to_string()?;
+            let mut m = Self { device_id, endpoint, manager, names: System::new(), master: 0.0, apps: Vec::new() };
             m.refresh()?;
             Ok(m)
         }
+    }
+
+    /// The id of the output this mixer was made for; when the default output changes, the mixer has to be made again.
+    pub fn device_id(&self) -> &str {
+        &self.device_id
     }
 
     pub fn refresh(&mut self) -> windows::core::Result<()> {

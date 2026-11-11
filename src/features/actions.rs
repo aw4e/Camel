@@ -28,6 +28,8 @@ pub enum Action {
     City(String),
     /// Check for a newer version, or install the one that was found.
     Update,
+    /// Copy a report about the audio devices and apps, for a bug report.
+    Diagnostics,
     Timer(Duration),
     Kill(String),
 }
@@ -125,7 +127,7 @@ pub fn sleep() {
 }
 
 /// Keywords that name a system action. Typing three letters or more of one is enough.
-const KEYWORDS: [(&str, &[&str]); 10] = [
+const KEYWORDS: [(&str, &[&str]); 11] = [
     ("lock", &["lock", "lock screen"]),
     ("sleep", &["sleep", "suspend"]),
     ("restart", &["restart", "reboot"]),
@@ -136,6 +138,7 @@ const KEYWORDS: [(&str, &[&str]); 10] = [
     ("mic", &["mic", "microphone", "mute mic", "mic mute"]),
     ("notes", &["notes", "my notes", "open notes"]),
     ("update", &["update", "updates", "check for updates", "check updates", "version"]),
+    ("diagnostics", &["diagnostics", "diagnose", "audio report"]),
 ];
 
 fn keyword_match(q: &str) -> Option<&'static str> {
@@ -191,6 +194,7 @@ pub fn suggest(query: &str, awake: bool, pending: &[crate::reminders::Reminder])
             "mute" => add(Action::Mute(false), "Mute or unmute the speakers", "Action"),
             "mic" => add(Action::Mute(true), "Mute or unmute the microphone", "Action"),
             "notes" => add(Action::OpenNotes, "Open notes", "Your quick notes"),
+            "diagnostics" => add(Action::Diagnostics, "Copy a diagnostic report", "Audio devices, apps and channels, for a bug report"),
             "update" => add(Action::Update, "Check for updates", &format!("Camel {}", crate::update::VERSION)),
             _ if awake => add(Action::KeepAwake, "Let this PC sleep again", "Keep awake is on"),
             _ => add(Action::KeepAwake, "Keep this PC awake", "Stops the screen and sleep from turning off"),
@@ -343,6 +347,7 @@ mod tests {
         assert_eq!((listed.len(), &listed[0].action), (1, &Action::Done(7)));
         assert_eq!(one("check for updates"), Some(Action::Update));
         assert_eq!(one("version"), Some(Action::Update));
+        assert_eq!(one("diagnostics"), Some(Action::Diagnostics));
         assert_eq!(one("note Buy  Milk "), Some(Action::Note("Buy  Milk".into())));
         assert_eq!(one("note "), Some(Action::OpenNotes), "no text yet: offer the notes file, not an empty note");
         // two letters are too little, and unrelated words match nothing

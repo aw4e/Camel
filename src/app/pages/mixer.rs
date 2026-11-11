@@ -11,6 +11,12 @@ impl Notch {
     /// A channel mixer in the style of Elgato Wave Link: apps are grouped into channels, a fader per channel sets the
     /// volume of every app in it, and a click on an app name moves it to the next channel. The last strip is the master.
     pub(crate) fn tab_mixer(&mut self, ui: &mut egui::Ui, o: egui::Pos2, a: f32) {
+        // the faders show their dragged value, so everything is only read again when no button is held
+        let due = self.mixer_at.elapsed() > Duration::from_millis(400) && !ui.input(|i| i.pointer.any_down());
+        // a mixer belongs to one output: when the default output changes (headphones plugged in, a device unplugged), make it again
+        if due && self.mixer.as_ref().is_some_and(|m| crate::system::audio_output().is_none_or(|(id, _)| id != m.device_id())) {
+            self.mixer = None;
+        }
         if self.mixer.is_none() {
             self.mixer = mixer::Mixer::new().ok();
         }
@@ -19,8 +25,7 @@ impl Notch {
             p.text(o + vec2(OPEN_W / 2.0, 90.0), Align2::CENTER_CENTER, "Audio unavailable", bold(13.0), fade(GRAY, a));
             return;
         };
-        // the faders show their dragged value, so the list of apps is only read again when no button is held
-        if self.mixer_at.elapsed() > Duration::from_millis(400) && !ui.input(|i| i.pointer.any_down()) {
+        if due {
             self.mixer_at = Instant::now();
             let _ = mx.refresh();
             self.speakers_muted = mixer::is_muted(false);
@@ -86,10 +91,11 @@ impl Notch {
 
             // the apps in the channel; a click moves one along
             if let Some(strip) = strip {
-                let shown: Vec<usize> = strip.apps.iter().copied().take(2).collect();
+                let apps = channels::one_per_app(&strip.apps, |i| snapshot[i].0.clone());
+                let shown: Vec<usize> = apps.iter().copied().take(2).collect();
                 for (line, app) in shown.iter().enumerate() {
                     let y = card.top() + 130.0 + line as f32 * 10.5;
-                    let label = if line == 1 && strip.apps.len() > 2 { format!("+{} more", strip.apps.len() - 1) } else { shorten(&snapshot[*app].0, 9) };
+                    let label = if line == 1 && apps.len() > 2 { format!("+{} more", apps.len() - 1) } else { shorten(&snapshot[*app].0, 9) };
                     let row = Rect::from_center_size(pos2(cx, y), vec2(w - 6.0, 10.0));
                     let r = hit(ui, &format!("app{i}-{line}"), row).on_hover_text(format!(
                         "{}. Click to move it to {}.",

@@ -9,7 +9,7 @@ pub(crate) mod widgets;
 use crate::platform::{self, HOTKEY_PRESSED, Tray};
 use crate::prelude::*;
 use crate::settings::{self, Settings};
-use crate::{actions, apps, clipboard, focus, media, mixer, monitor, notes, radios, reminders, spotlight, system, update, weather};
+use crate::{actions, apps, channels, clipboard, focus, media, mixer, monitor, notes, radios, reminders, spotlight, system, update, weather};
 use chrono::Local;
 use global_hotkey::GlobalHotKeyManager;
 use global_hotkey::hotkey::HotKey;
@@ -459,6 +459,13 @@ impl Notch {
                 }
             }
             Update => self.update_action(),
+            Diagnostics => {
+                let text = self.diagnostics();
+                if let Ok(mut c) = arboard::Clipboard::new() {
+                    let _ = c.set_text(text);
+                }
+                self.show_toast(ToastIcon::Clipboard, "Diagnostics copied", "Paste it into a bug report".to_owned());
+            }
             Weather => self.set_weather(!self.settings.weather),
             City(name) => {
                 self.settings.city.clone_from(&name);
@@ -932,6 +939,17 @@ impl Notch {
         if self.tab != Tab::Controls {
             self.radios.unwatch();
         }
+    }
+
+    /// The text `diagnostics` copies. It names devices and apps, so it is shown to nobody until the user pastes it.
+    fn diagnostics(&self) -> String {
+        let output = system::audio_output().map_or_else(|| "none".to_owned(), |(_, name)| name);
+        let sessions: Vec<(String, usize, f32, bool)> = mixer::Mixer::new()
+            .map(|m| m.apps.iter().map(|a| (a.name.clone(), channels::channel_of(&a.name, &self.settings.channel_overrides), a.level, a.muted)).collect())
+            .unwrap_or_default();
+        let refs: Vec<(&str, usize, f32, bool)> = sessions.iter().map(|(n, c, l, m)| (n.as_str(), *c, *l, *m)).collect();
+        let os = sysinfo::System::long_os_version().unwrap_or_default();
+        channels::report(update::VERSION, &os, &output, &refs, self.settings.channel_overrides.len())
     }
 
     fn mode_alpha(&self) -> f32 {

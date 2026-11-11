@@ -1,0 +1,8 @@
+{
+  "_comment": "Apps by process name (lowercase, no .exe). Not listed: Game. Hidden apps never show in the mixer.",
+  "system": ["system sounds"],
+  "music": ["spotify", "vlc", "musicbee", "foobar2000", "itunes", "applemusic", "wmplayer", "tidal", "deezer", "aimp", "winamp", "potplayer", "mpc-hc64", "mpv"],
+  "browser": ["chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "zen", "iexplore", "waterfox", "librewolf", "chromium"],
+  "voice": ["discord", "discordptb", "discordcanary", "teams", "ms-teams", "zoom", "skype", "telegram", "slack", "whatsapp", "webex", "signal", "mumble", "teamspeak"],
+  "hidden": ["camel", "audiodg", "runtimebroker", "searchhost", "searchapp", "shellexperiencehost", "startmenuexperiencehost", "textinputhost"]
+}
