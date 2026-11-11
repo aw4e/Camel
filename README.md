@@ -53,7 +53,7 @@ task with `schtasks /Delete /TN Camel /F`.
 ## Using Camel
 
 - **Hover** the pill to open it. Move away to close it. With **Hover to expand** off, click it instead.
-- **Click** the tab icons, or **scroll** over the tab row, to switch pages.
+- **Click** the tab icons, or **scroll** over the tab row, to switch pages. The chosen tab shows its name beside its icon.
 - **Scroll sideways** on the media page to skip tracks. **Middle-click** toggles play and pause.
 - **Alt+Space** opens Spotlight.
 - **Gear icon** opens settings. Quit lives there and in the tray menu.
@@ -295,7 +295,7 @@ from them:
   nested paddings compose without looking arbitrary. Small gaps are 5, standard 8, large 13.
 - **Golden ratio:** the content width (428 px) is cut 1.618 : 1 with a 13 px gutter. The Clock puts the time and date in
   the wide column (256 px) and the month in the narrow one (159 px). The Timer puts its controls in the wide column
-  and the progress ring in the narrow one. A tab pill is as wide as it is tall times 1.618.
+  and the progress ring in the narrow one. A tab that is not chosen is a pill the height plus one Fibonacci step wide; the chosen tab opens to show its name beside its icon.
 - **Icons in buttons:** icons are drawn at 16 px and scaled to fit, leaving one Fibonacci step (5 px) above and below, never
   smaller than half size. A 24 px tab pill gets a 14 px icon.
 - **Grouped buttons:** related buttons share one rounded track with segments, like the tab bar. The timer's presets are

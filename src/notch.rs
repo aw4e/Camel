@@ -30,6 +30,22 @@ fn tab_icon(t: Tab) -> fn(&egui::Painter, egui::Pos2, Color32) {
     }
 }
 
+/// The short name shown beside the icon of the chosen tab.
+fn tab_name(t: Tab) -> &'static str {
+    match t {
+        Tab::Media => "Media",
+        Tab::Controls => "Controls",
+        Tab::Tasks => "Tasks",
+        Tab::Mixer => "Mixer",
+        Tab::Clock => "Clock",
+        Tab::Timer => "Timer",
+        Tab::Shelf => "Shelf",
+        Tab::Clipboard => "Clipboard",
+        Tab::Apps => "Apps",
+        Tab::Settings => "Settings",
+    }
+}
+
 fn tab_label(t: Tab) -> &'static str {
     match t {
         Tab::Media => "Now playing",
@@ -142,7 +158,6 @@ pub(crate) struct Notch {
     tab: Tab,
     prev_tab: Tab,
     tab_at: Instant,
-    pill: Spring,
     w: Spring,
     h: Spring,
     /// OS window size; only changes when a transition starts or ends, never per frame.
@@ -251,7 +266,6 @@ impl Notch {
             tab: Tab::Media,
             prev_tab: Tab::Media,
             tab_at: Instant::now() - Duration::from_secs(1),
-            pill: Spring { x: 0.0, v: 0.0 },
             w: Spring { x: PILL_W, v: 0.0 },
             h: Spring { x: PILL_H, v: 0.0 },
             win: Vec2::ZERO,
@@ -985,13 +999,8 @@ impl eframe::App for Notch {
                 self.radios.unwatch();
             }
         }
-        let tab_px = tab_off(MAIN_TABS.iter().position(|t| *t == self.tab).unwrap_or(0));
-        self.pill.step(tab_px, dt);
-        if self.reduce_motion {
-            self.pill.snap(tab_px);
-        }
         let fading = self.tab_at.elapsed() < Duration::from_millis(200);
-        let moving = shape_moving || !self.pill.settled(tab_px) || fading;
+        let moving = shape_moving || fading;
         // 30 fps is plenty for the equalizer and progress bar; full rate only while something springs
         let wake = if moving {
             0 // next vsync: paced by the display, not by a timer

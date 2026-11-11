@@ -1,4 +1,4 @@
-use crate::notch::{MAIN_TABS, Notch, Tab, ToastIcon, tab_icon, tab_label};
+use crate::notch::{MAIN_TABS, Notch, Tab, ToastIcon, tab_icon, tab_label, tab_name};
 use crate::prelude::*;
 use crate::{media, update};
 use chrono::Local;
@@ -152,25 +152,44 @@ impl Notch {
         let o = rect.min;
         let time = ui.input(|i| i.time) as f32;
 
-        // segmented control: one track, the selected pill springs between segments
+        // segmented control: one track; the chosen tab shows its name beside its icon, the others are icons only
+        let names: Vec<_> = MAIN_TABS.iter().map(|t| p.layout_no_wrap(tab_name(*t).to_owned(), bold(11.0), Color32::WHITE)).collect();
+        let speed = if self.reduce_motion { 0.0 } else { 0.18 };
+        let widths: Vec<f32> = MAIN_TABS
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let target = if self.tab == *t { tab_open_w(names[i].size().x) } else { TAB_W };
+                ui.ctx().animate_value_with_time(ui.scope_id().with(("tabw", i)), target, speed)
+            })
+            .collect();
+        let offsets = tab_offsets(&widths);
+        let last = MAIN_TABS.len() - 1;
         let track_h = TAB_PILL_H + 2.0 * TAB_INSET;
-        let track = Rect::from_min_size(o + vec2(12.0, 16.0 - track_h / 2.0), vec2(tab_off(MAIN_TABS.len() - 1) + TAB_W + 2.0 * TAB_INSET, track_h));
+        let track = Rect::from_min_size(o + vec2(12.0, 16.0 - track_h / 2.0), vec2(offsets[last] + widths[last] + 2.0 * TAB_INSET, track_h));
         p.rect_filled(track, track_h / 2.0, fade(fill(14), a));
-        let in_set = ui.ctx().animate_bool_with_time(ui.scope_id().with("pill"), MAIN_TABS.contains(&self.tab), 0.15);
-        let pill = Rect::from_min_size(track.min + vec2(TAB_INSET + self.pill.x, TAB_INSET), vec2(TAB_W, TAB_PILL_H));
-        p.rect_filled(pill, TAB_PILL_H / 2.0, fade(fill(36), a * in_set));
         for i in (2..MAIN_TABS.len()).step_by(2) {
-            let x = track.left() + TAB_INSET + tab_off(i) - GROUP_GAP / 2.0;
+            let x = track.left() + TAB_INSET + offsets[i] - GROUP_GAP / 2.0;
             p.line_segment([pos2(x, track.top() + 8.0), pos2(x, track.bottom() - 8.0)], Stroke::new(1.0, fade(fill(30), a)));
         }
         for (i, tab) in MAIN_TABS.iter().enumerate() {
-            let r = Rect::from_min_size(track.min + vec2(TAB_INSET + tab_off(i), TAB_INSET), vec2(TAB_W, TAB_PILL_H));
+            let r = Rect::from_min_size(track.min + vec2(TAB_INSET + offsets[i], TAB_INSET), vec2(widths[i], TAB_PILL_H));
             let resp = hit(ui, &format!("tab{i}"), r).on_hover_text(tab_label(*tab));
-            if resp.hovered() && self.tab != *tab {
+            let chosen = self.tab == *tab;
+            if chosen {
+                p.rect_filled(r, TAB_PILL_H / 2.0, fade(fill(36), a));
+            } else if resp.hovered() {
                 p.rect_filled(r, TAB_PILL_H / 2.0, fade(fill(18), a));
             }
-            let col = if self.tab == *tab || resp.hovered() { Color32::WHITE } else { GRAY };
-            ui::scaled(&p, r.center(), ui::icon_fit(TAB_PILL_H), || tab_icon(*tab)(&p, r.center(), fade(col, a)));
+            let col = if chosen || resp.hovered() { Color32::WHITE } else { GRAY };
+            let icon_at = pos2(r.left() + TAB_W / 2.0, r.center().y);
+            ui::scaled(&p, icon_at, ui::icon_fit(TAB_PILL_H), || tab_icon(*tab)(&p, icon_at, fade(col, a)));
+            // the name fades in as the pill opens
+            let open = ((widths[i] - TAB_W) / (tab_open_w(names[i].size().x) - TAB_W)).clamp(0.0, 1.0);
+            if open > 0.05 {
+                let text_at = pos2(r.left() + TAB_W - GAP_S + 2.0, r.center().y - names[i].size().y / 2.0);
+                p.with_clip_rect(r).galley(text_at, names[i].clone(), fade(Color32::WHITE, a * open * open));
+            }
             if resp.clicked() {
                 self.tab = *tab;
             }

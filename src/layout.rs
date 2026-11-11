@@ -45,15 +45,31 @@ pub(crate) fn phi_columns() -> (f32, f32) {
 }
 /// A tab icon is 14 px (a 16 px drawing scaled by `ui::icon_fit`), with one Fibonacci step (5 px) above and below: 14 + 2 x 5.
 pub(crate) const TAB_PILL_H: f32 = 24.0;
-/// Pill width = height x PHI (38.8), rounded down to an even number of pixels.
-pub(crate) const TAB_W: f32 = 38.0;
+/// A tab that is not chosen is an icon in a pill the height plus one Fibonacci step (5) wide. The chosen tab grows to also
+/// show its name beside the icon.
+pub(crate) const TAB_W: f32 = 29.0;
 /// Extra space after every second tab (audio, time, storage, apps): a Fibonacci step.
 pub(crate) const GROUP_GAP: f32 = 8.0;
 /// The track around the pills: the pill inset is 2 px, so its height is the pill height + 4.
 pub(crate) const TAB_INSET: f32 = 2.0;
 
-pub(crate) fn tab_off(i: usize) -> f32 {
-    i as f32 * TAB_W + (i / 2) as f32 * GROUP_GAP
+/// The width of the chosen tab: the icon cell, the name, and one standard gap after it.
+pub(crate) fn tab_open_w(label_w: f32) -> f32 {
+    TAB_W - GAP_S + 2.0 + label_w + GAP
+}
+
+/// Left edge of each tab inside the track, with the extra gap after every second one.
+pub(crate) fn tab_offsets(widths: &[f32]) -> Vec<f32> {
+    let mut x = 0.0;
+    widths
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            let at = x + (i / 2) as f32 * GROUP_GAP;
+            x += w;
+            at
+        })
+        .collect()
 }
 
 pub(crate) const SPOT_W: f32 = 480.0;
@@ -105,12 +121,17 @@ mod tests {
     fn tab_bar_follows_the_rules() {
         // a 16 px drawing scaled to fit leaves one Fibonacci step (5 px) above and below
         assert_eq!(TAB_PILL_H - 16.0 * ui::icon_fit(TAB_PILL_H), 2.0 * GAP_S);
-        // width is the golden ratio of the height, rounded down to an even pixel count
-        assert!((TAB_W - TAB_PILL_H * PHI).abs() < 1.0 && TAB_W % 2.0 == 0.0);
+        // a collapsed pill is the height plus one Fibonacci step
+        assert_eq!(TAB_W, TAB_PILL_H + GAP_S);
         // gaps come from the Fibonacci scale
         assert!([3.0, 5.0, 8.0, 13.0, 21.0, 34.0].contains(&GROUP_GAP));
-        // the bar leaves room for the battery readout on its right (leftmost at x = 358)
-        let track_right = 12.0 + tab_off(MAIN_TABS.len() - 1) + TAB_W + 2.0 * TAB_INSET;
+        // the bar leaves room for the battery readout on its right (leftmost at x = 358), even with the widest name chosen
+        // ("Clipboard" in bold 11 px is about 56 px wide)
+        let widest = tab_open_w(56.0);
+        let widths: Vec<f32> = (0..MAIN_TABS.len()).map(|i| if i == 0 { widest } else { TAB_W }).collect();
+        let offsets = tab_offsets(&widths);
+        let track_right = 12.0 + offsets[MAIN_TABS.len() - 1] + TAB_W + 2.0 * TAB_INSET;
         assert!(track_right + 8.0 <= 358.0, "tab bar ends at {track_right}");
+        assert_eq!(tab_offsets(&[10.0, 10.0, 10.0]), [0.0, 10.0, 28.0], "the gap comes after every second tab");
     }
 }
