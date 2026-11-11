@@ -166,19 +166,18 @@ impl Notch {
         let speed = if self.reduce_motion { 0.0 } else { 0.18 };
         let chosen_group = group_of(self.tab);
         let group_ids: Vec<usize> = MAIN_TABS.iter().map(|t| group_of(*t).unwrap_or(0)).collect();
+        // each tab eases between hidden, icon and icon with name; a linear slide looks mechanical
+        let ease_out = egui::emath::easing::cubic_out;
         let widths: Vec<f32> = MAIN_TABS
             .iter()
             .enumerate()
             .map(|(i, t)| {
                 let g = group_ids[i];
-                let target = if Some(g) == chosen_group {
-                    if self.tab == *t { tab_open_w(names[i].size().x) } else { TAB_W }
-                } else if GROUPS[g].1[0] == *t {
-                    TAB_W
-                } else {
-                    0.0
-                };
-                ui.ctx().animate_value_with_time(ui.scope_id().with(("tabw", i)), target, speed)
+                let visible = Some(g) == chosen_group || GROUPS[g].1[0] == *t;
+                let id = ui.scope_id().with(("tab", i));
+                let shown = ui.ctx().animate_bool_with_time_and_easing(id.with("shown"), visible, speed, ease_out);
+                let named = ui.ctx().animate_bool_with_time_and_easing(id.with("named"), self.tab == *t, speed, ease_out);
+                shown * (TAB_W + named * (tab_open_w(names[i].size().x) - TAB_W))
             })
             .collect();
         let offsets = tab_offsets(&widths, &group_ids);
@@ -227,10 +226,6 @@ impl Notch {
                 self.tab = if in_open_group { *tab } else { self.group_last[g] };
             }
         }
-        // page content fades in after a tab switch
-        let ease = (self.tab_at.elapsed().as_secs_f32() / 0.18).clamp(0.0, 1.0);
-        let content = a * ease * (2.0 - ease);
-
         let right = o.x + OPEN_W - 14.0;
         let gear = Rect::from_center_size(pos2(right - 2.0, o.y + 16.0), vec2(24.0, 22.0));
         let g = hit(ui, "gear", gear);
@@ -277,6 +272,11 @@ impl Notch {
                 }
             }
         }
+
+        // page content fades in after a tab switch, starting in the frame of the click
+        self.sync_tab();
+        let ease = (self.tab_at.elapsed().as_secs_f32() / 0.18).clamp(0.0, 1.0);
+        let content = a * (0.3 + 0.7 * ease * (2.0 - ease));
 
         match self.tab {
             Tab::Media => self.tab_media(ui, o, m, content, time),

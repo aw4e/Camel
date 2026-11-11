@@ -906,6 +906,27 @@ impl Notch {
         }
     }
 
+    /// Does what a change of page needs once: restarts the fade, and drops what the old page loaded. It runs again just
+    /// before a page is drawn, so a click in the tab bar starts the fade in that same frame; without that the new page
+    /// shows at full strength for one frame, then dips to nothing and fades in.
+    pub(crate) fn sync_tab(&mut self) {
+        if self.tab == self.prev_tab {
+            return;
+        }
+        self.prev_tab = self.tab;
+        if let Some(g) = group_of(self.tab) {
+            self.group_last[g] = self.tab;
+        }
+        self.tab_at = Instant::now();
+        (self.apps, self.startups, self.apps_scroll, self.timer_edit) = (None, None, 0, None);
+        if self.tab == Tab::Settings {
+            self.settings.autostart = settings::autostart_enabled();
+        }
+        if self.tab != Tab::Controls {
+            self.radios.unwatch();
+        }
+    }
+
     fn mode_alpha(&self) -> f32 {
         ((self.mode_at.elapsed().as_secs_f32() - 0.06) / 0.15).clamp(0.0, 1.0)
     }
@@ -1005,20 +1026,7 @@ impl eframe::App for Notch {
 
         let (target, shape_moving) = self.fit_window(&ctx, mode, dt);
 
-        if self.tab != self.prev_tab {
-            self.prev_tab = self.tab;
-            if let Some(g) = group_of(self.tab) {
-                self.group_last[g] = self.tab;
-            }
-            self.tab_at = now;
-            (self.apps, self.startups, self.apps_scroll, self.timer_edit) = (None, None, 0, None);
-            if self.tab == Tab::Settings {
-                self.settings.autostart = settings::autostart_enabled();
-            }
-            if self.tab != Tab::Controls {
-                self.radios.unwatch();
-            }
-        }
+        self.sync_tab();
         let fading = self.tab_at.elapsed() < Duration::from_millis(200);
         let moving = shape_moving || fading;
         // 30 fps is plenty for the equalizer and progress bar; full rate only while something springs
