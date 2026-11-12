@@ -218,13 +218,20 @@ Camel stops reading the clipboard altogether. Settings, notes and the uninstall 
 
 **Apps.** The Apps tab reads the registry and the file system on your machine and sends nothing anywhere. Leftover cleanup
 only offers folders named exactly like the program (or its install folder) under the usual data locations, never registry
-keys, and only moves them to the Recycle Bin when you click **Clean up**. Camel remembers a finished uninstall in
-`%APPDATA%\Camel\uninstall.json` until you clean up or dismiss it, so closing Camel does not lose the list and a failed
-clean up can be retried. Files that Windows will not release are queued for deletion at the next restart.
+keys, and only moves them to the Recycle Bin when you click **Clean up**. It never offers anything under Windows,
+WindowsApps or your own folders (Desktop, Documents, Downloads and the like), nor a folder another installed program still
+uses. Camel remembers a finished uninstall in `%APPDATA%\Camel\uninstall.json` until you clean up or dismiss it, so
+closing Camel does not lose the list and a failed clean up can be retried. Files that Windows will not release are deleted
+for good at the next restart only after a second **Clean up** click. Uninstallers of per-user programs start without
+administrator rights.
 
-**Updates.** A download is accepted only from this repository's release downloads and only when its SHA-256 matches the
-one published with the release. The executable is not code-signed, so trust rests on the GitHub account that publishes the
-releases.
+**Crashes.** If Camel crashes, the reason is appended to `%APPDATA%\Camel\crash.log`. Nothing is sent anywhere.
+
+**Updates.** A download is accepted only from this repository's release downloads, only when its SHA-256 matches the one
+published with the release, and only when `camel.exe.sig`, an Ed25519 signature made by the release workflow, verifies
+against the public key built into Camel (`src/services/update.rs`). Someone who could upload release files but lacks the
+signing key cannot ship an update. The executable is not Authenticode-signed, so Windows SmartScreen may still warn on
+first run.
 
 ### Administrator rights
 
@@ -235,15 +242,16 @@ need them say so. Start it with `--no-elevate` to skip the prompt. Debug builds 
 
 Running elevated has side effects:
 
-- **Start with Windows** registers a scheduled task with the highest run level instead of a `Run` entry, because Windows
-  silently skips elevated programs listed under `Run`.
+- **Start with Windows** registers a scheduled task instead of a `Run` entry, because Windows silently skips elevated
+  programs listed under `Run`. The task runs elevated only when `camel.exe` sits under `Program Files`; from a folder you
+  can write to (such as Downloads) it starts without admin rights, so a swapped exe cannot gain them at logon.
 - Windows blocks drag and drop from a normal Explorer window into an elevated window, so dragging files onto the shelf
   does not work in the release build.
 - Programs and files you open from Spotlight, the shelf or the Apps tab start with administrator rights too.
 
 ## Build from source
 
-Requires Windows 10 or 11 and a recent Rust toolchain (edition 2024).
+Requires Windows 10 or 11 and Rust 1.95 or newer (`rustup update stable`).
 
 ```powershell
 git clone https://github.com/aw4e/Camel.git
@@ -268,8 +276,13 @@ network) by hand.
 ### Releases
 
 The version lives in `Cargo.toml`. Pushing a tag that matches it (`v0.2.2` for `version = "0.2.2"`) starts the
-[release workflow](.github/workflows/release.yml), which tests, builds on Windows and publishes `camel.exe` together with
-`camel.exe.sha256`. Camel's updater reads that release.
+[release workflow](.github/workflows/release.yml), which tests, builds on Windows, signs the exe and publishes
+`camel.exe` together with `camel.exe.sha256` and `camel.exe.sig`. Camel's updater reads that release.
+
+Signing needs the repository secret `UPDATE_SIGNING_KEY`: an Ed25519 private key in PEM form
+(`openssl genpkey -algorithm ed25519 -out key.pem`). Its public half is `SIGNING_KEY` in `src/services/update.rs`, and the
+test `the_compiled_in_key_matches_the_release_signing_key` fails if the two drift apart. Without the secret the workflow
+refuses to publish. A fork that ships its own releases needs its own key pair, its own `SIGNING_KEY` and its own `REPO`.
 
 ### Fonts
 
