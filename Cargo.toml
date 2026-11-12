@@ -14,6 +14,7 @@ chrono = "0.4.45"
 eframe = { version = "0.37.0", default-features = false, features = ["default_fonts", "glow"] }
 global-hotkey = "0.9.0"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+ring = "0.17"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.10"

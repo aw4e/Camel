@@ -1,5 +1,11 @@
-//! Self-update from GitHub releases. The only requests are to api.github.com and github.com, the download must match
-//! the SHA-256 published with the release, and nothing is installed until the user asks for it.
+//! Self-update from GitHub releases. The only requests are to api.github.com and github.com, and nothing is installed
+//! until the user asks for it.
+//!
+//! Two independent checks guard the download, because Camel runs as administrator and installs what it downloads:
+//! - SHA-256 from the release: catches a broken or truncated download.
+//! - Ed25519 signature (`camel.exe.sig`) against `SIGNING_KEY`, compiled in: proves the exe was built by the release
+//!   workflow, which alone holds the private key (GitHub secret `UPDATE_SIGNING_KEY`). Someone who can upload release
+//!   assets, but has not got the key, cannot ship an update. A release without a valid signature is never installed.
 
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -13,12 +19,19 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 const REPO: &str = "aw4e/Camel";
 const ASSET: &str = "camel.exe";
 const MAX_DOWNLOAD: u64 = 64 * 1024 * 1024;
+/// Public half of the release signing key (raw 32-byte Ed25519). Rotating the key: put the new public key here, ship
+/// that build signed with the OLD key, and only then switch the workflow secret to the new private key.
+const SIGNING_KEY: [u8; 32] = [
+    0xf6, 0x74, 0x07, 0x6f, 0x17, 0xbe, 0xcd, 0x91, 0xc9, 0xf7, 0x78, 0xd5, 0x35, 0x9f, 0x2e, 0xd4, 0xd1, 0x94, 0x8c, 0x5a, 0xa3, 0x97, 0x75, 0x06, 0x14, 0x72,
+    0x5f, 0x1b, 0xd4, 0x90, 0xba, 0x35,
+];
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Release {
     pub version: String,
     url: String,
     sha256: String,
+    sig_url: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -66,8 +79,9 @@ fn valid_sha256(s: &str) -> Option<String> {
     (hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit())).then_some(hex)
 }
 
-/// The newer release in an API answer. The asset must live under this repository's release downloads and carry a
-/// SHA-256, either in the API's `digest` field or in a `camel.exe.sha256` asset the caller fetches (`checksum_url`).
+/// The newer release in an API answer. The asset must live under this repository's release downloads, have a
+/// `camel.exe.sig` beside it, and carry a SHA-256, either in the API's `digest` field or in a `camel.exe.sha256` asset
+/// the caller fetches (`checksum_url`).
 fn pick(json: &str, current: &str) -> Result<Option<(Release, Option<String>)>, String> {
     let api: Api = serde_json::from_str(json).map_err(|e| format!("unreadable answer: {e}"))?;
     if !is_newer(current, &api.tag_name) {
@@ -77,17 +91,17 @@ fn pick(json: &str, current: &str) -> Result<Option<(Release, Option<String>)>, 
     if !exe.browser_download_url.starts_with(&download_prefix()) {
         return Err("download is not hosted by the repository".into());
     }
-    let checksum_url = api
-        .assets
-        .iter()
-        .find(|a| a.name == format!("{ASSET}.sha256") && a.browser_download_url.starts_with(&download_prefix()))
-        .map(|a| a.browser_download_url.clone());
+    let asset_url = |name: String| {
+        api.assets.iter().find(|a| a.name == name && a.browser_download_url.starts_with(&download_prefix())).map(|a| a.browser_download_url.clone())
+    };
+    let checksum_url = asset_url(format!("{ASSET}.sha256"));
+    let sig_url = asset_url(format!("{ASSET}.sig")).ok_or("release is not signed")?;
     let sha256 = exe.digest.as_deref().and_then(valid_sha256).unwrap_or_default();
     if sha256.is_empty() && checksum_url.is_none() {
         return Err("release has no checksum".into());
     }
     let version = api.tag_name.trim_start_matches('v').to_owned();
-    Ok(Some((Release { version, url: exe.browser_download_url.clone(), sha256 }, checksum_url)))
+    Ok(Some((Release { version, url: exe.browser_download_url.clone(), sha256, sig_url }, checksum_url)))
 }
 
 fn agent() -> ureq::Agent {
@@ -138,6 +152,12 @@ fn verify(file: &Path, expected: &str) -> bool {
     std::fs::File::open(file).and_then(sha256_hex).is_ok_and(|h| h == expected)
 }
 
+/// True when `sig` is a valid Ed25519 signature by `key` over the whole of `file`.
+fn verify_signature(key: &[u8; 32], file: &Path, sig: &[u8]) -> bool {
+    use ring::signature::{ED25519, UnparsedPublicKey};
+    std::fs::read(file).is_ok_and(|bytes| UnparsedPublicKey::new(&ED25519, key).verify(&bytes, sig).is_ok())
+}
+
 fn sibling(exe: &Path, suffix: &str) -> PathBuf {
     let mut name = exe.file_name().unwrap_or_default().to_os_string();
     name.push(suffix);
@@ -155,11 +175,31 @@ fn download(release: &Release, to: &Path) -> Result<(), String> {
     let mut out = std::fs::OpenOptions::new().write(true).create_new(true).open(to).map_err(|e| format!("cannot write next to the program: {e}"))?;
     std::io::copy(&mut reader, &mut out).map_err(|e| format!("download failed: {e}"))?;
     out.flush().map_err(|e| e.to_string())?;
+    drop(out);
     if !verify(to, &release.sha256) {
         let _ = std::fs::remove_file(to);
         return Err("download does not match its checksum".into());
     }
+    let sig = fetch_signature(&release.sig_url)?;
+    if !verify_signature(&SIGNING_KEY, to, &sig) {
+        let _ = std::fs::remove_file(to);
+        return Err("download is not signed by the Camel release key".into());
+    }
     Ok(())
+}
+
+/// The 64-byte signature asset; anything larger is refused unread.
+fn fetch_signature(url: &str) -> Result<Vec<u8>, String> {
+    if !url.starts_with(&download_prefix()) {
+        return Err("signature is not hosted by the repository".into());
+    }
+    let mut resp = agent().get(url).header("User-Agent", "camel-updater").call().map_err(|e| format!("signature download failed: {e}"))?;
+    let mut sig = Vec::new();
+    resp.body_mut().with_config().limit(1024).reader().read_to_end(&mut sig).map_err(|e| format!("signature download failed: {e}"))?;
+    if sig.len() != 64 {
+        return Err("signature has the wrong size".into());
+    }
+    Ok(sig)
 }
 
 /// Puts `staged` in place of `exe`. A running exe can be renamed but not overwritten, so the old one is moved aside
@@ -261,7 +301,9 @@ mod tests {
     use super::*;
 
     fn api(tag: &str, url: &str, digest: &str) -> String {
-        format!(r#"{{"tag_name":"{tag}","assets":[{{"name":"camel.exe","browser_download_url":"{url}","digest":{digest}}}]}}"#)
+        format!(
+            r#"{{"tag_name":"{tag}","assets":[{{"name":"camel.exe","browser_download_url":"{url}","digest":{digest}}},{{"name":"camel.exe.sig","browser_download_url":"{GOOD_URL}.sig"}}]}}"#
+        )
     }
 
     const GOOD_URL: &str = "https://github.com/aw4e/Camel/releases/download/v9.0.0/camel.exe";
@@ -304,12 +346,14 @@ mod tests {
         assert!(pick(&api("v9.0.0", GOOD_URL, "\"sha256:xyz\""), "0.2.0").is_err(), "checksum is not hex");
         assert!(pick("{}", "0.2.0").is_err());
         assert!(pick(r#"{"tag_name":"v9.0.0","assets":[]}"#, "0.2.0").is_err(), "no exe asset");
+        let unsigned = format!(r#"{{"tag_name":"v9.0.0","assets":[{{"name":"camel.exe","browser_download_url":"{GOOD_URL}","digest":"sha256:{HEX}"}}]}}"#);
+        assert_eq!(pick(&unsigned, "0.2.0").unwrap_err(), "release is not signed");
     }
 
     #[test]
     fn a_checksum_asset_stands_in_for_the_digest_field() {
         let json = format!(
-            r#"{{"tag_name":"v9.0.0","assets":[{{"name":"camel.exe","browser_download_url":"{GOOD_URL}"}},{{"name":"camel.exe.sha256","browser_download_url":"{GOOD_URL}.sha256"}}]}}"#
+            r#"{{"tag_name":"v9.0.0","assets":[{{"name":"camel.exe","browser_download_url":"{GOOD_URL}"}},{{"name":"camel.exe.sha256","browser_download_url":"{GOOD_URL}.sha256"}},{{"name":"camel.exe.sig","browser_download_url":"{GOOD_URL}.sig"}}]}}"#
         );
         let (r, checksum_url) = pick(&json, "0.2.0").unwrap().unwrap();
         assert!(r.sha256.is_empty());
@@ -335,6 +379,38 @@ mod tests {
         std::fs::write(&file, b"not an exe").unwrap();
         assert!(!verify(&file, &sha256_hex(&b"not an exe"[..]).unwrap()), "right checksum, but not an executable");
         assert!(!verify(&dir.join("missing"), HEX));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_compiled_in_key_matches_the_release_signing_key() {
+        // made with: openssl pkeyutl -sign -inkey <release key> -rawin -in <file holding the message>
+        const SIG: [u8; 64] = [
+            0x8a, 0x37, 0xfb, 0xb1, 0x58, 0x0f, 0x78, 0x8f, 0xbf, 0xda, 0x7a, 0x08, 0xf0, 0xdb, 0x75, 0xd9, 0x28, 0x0c, 0x23, 0x67, 0xed, 0xda, 0x80, 0xd2,
+            0x0b, 0x27, 0xec, 0x76, 0xaf, 0x01, 0x08, 0xc1, 0xc0, 0xdf, 0x9a, 0xc6, 0xab, 0x6d, 0xfc, 0x3c, 0xa8, 0x4a, 0x88, 0xeb, 0xc5, 0xf1, 0x8a, 0x92,
+            0x71, 0x43, 0x01, 0xc8, 0xb8, 0x5a, 0x10, 0x3a, 0xe1, 0x7f, 0x9f, 0xb5, 0xdd, 0xfd, 0x97, 0x0d,
+        ];
+        let dir = scratch("key");
+        let file = dir.join("msg");
+        std::fs::write(&file, b"MZ camel signing self-check").unwrap();
+        assert!(verify_signature(&SIGNING_KEY, &file, &SIG), "SIGNING_KEY does not belong to the key the workflow signs with");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn only_a_signature_by_the_key_over_the_exact_file_passes() {
+        use ring::signature::{Ed25519KeyPair, KeyPair};
+        let pkcs8 = Ed25519KeyPair::generate_pkcs8(&ring::rand::SystemRandom::new()).unwrap();
+        let pair = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).unwrap();
+        let key: [u8; 32] = pair.public_key().as_ref().try_into().unwrap();
+        let dir = scratch("sig");
+        let file = dir.join("camel.exe.new");
+        std::fs::write(&file, b"MZ signed program").unwrap();
+        let sig = pair.sign(b"MZ signed program");
+        assert!(verify_signature(&key, &file, sig.as_ref()));
+        assert!(!verify_signature(&SIGNING_KEY, &file, sig.as_ref()), "signed by another key");
+        std::fs::write(&file, b"MZ signed programX").unwrap();
+        assert!(!verify_signature(&key, &file, sig.as_ref()), "file changed after signing");
         let _ = std::fs::remove_dir_all(dir);
     }
 

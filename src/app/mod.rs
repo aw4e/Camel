@@ -910,7 +910,8 @@ impl Notch {
         }
         let due = match self.update_at {
             None => self.launched.elapsed() > Duration::from_secs(20),
-            Some(t) => t.elapsed() > Duration::from_secs(24 * 3600),
+            // a failed check (offline, GitHub down) is tried again after an hour instead of a day
+            Some(t) => t.elapsed() > Duration::from_secs(if matches!(self.updater.status(), update::Status::Failed(_)) { 3600 } else { 24 * 3600 }),
         };
         if self.settings.auto_update && due {
             self.update_at = Some(Instant::now());

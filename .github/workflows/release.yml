@@ -11,9 +11,12 @@ jobs:
   release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      # pinned by commit: this job can publish releases, so a moved tag must not change what runs here
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: 1.95.0
+      - uses: Swatinem/rust-cache@bc2d2e71bd35c5549942babaa51a89c586b981d1 # v2.8.1
       - name: Tag matches Cargo.toml
         shell: bash
         run: |
@@ -29,6 +32,18 @@ jobs:
           Copy-Item target/release/camel.exe camel.exe
           $hash = (Get-FileHash camel.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  camel.exe" | Out-File -Encoding ascii camel.exe.sha256
+      - name: Sign
+        # Ed25519 over the exe; Camel checks it against the public key in src/services/update.rs before installing
+        shell: bash
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          [ -n "$UPDATE_SIGNING_KEY" ] || { echo "secret UPDATE_SIGNING_KEY is missing; refusing to publish an unsigned release"; exit 1; }
+          umask 077
+          printf '%s\n' "$UPDATE_SIGNING_KEY" > "$RUNNER_TEMP/key.pem"
+          openssl pkeyutl -sign -inkey "$RUNNER_TEMP/key.pem" -rawin -in camel.exe -out camel.exe.sig
+          rm -f "$RUNNER_TEMP/key.pem"
+          [ "$(wc -c < camel.exe.sig)" -eq 64 ] || { echo "signature is not 64 bytes"; exit 1; }
       - name: Publish
         shell: bash
         env:
@@ -36,4 +51,4 @@ jobs:
         run: |
           # the notes written for this release; the generated diff link is only the fallback
           if [ -f "release-notes/${GITHUB_REF_NAME}.md" ]; then notes=(--notes-file "release-notes/${GITHUB_REF_NAME}.md"); else notes=(--generate-notes); fi
-          gh release create "$GITHUB_REF_NAME" camel.exe camel.exe.sha256 --title "Camel ${GITHUB_REF_NAME#v}" "${notes[@]}"
+          gh release create "$GITHUB_REF_NAME" camel.exe camel.exe.sha256 camel.exe.sig --title "Camel ${GITHUB_REF_NAME#v}" "${notes[@]}"
