@@ -188,7 +188,6 @@ fn work(target: &str, stop: &AtomicBool, set: &dyn Fn(Status)) {
     let (mut mix, mut part) = (Vec::<f32>::new(), Vec::<f32>::new());
 
     while !stop.load(Ordering::Relaxed) {
-        // once a second: who is playing on the default output
         if last_scan.is_none_or(|t| t.elapsed() > Duration::from_secs(1)) {
             last_scan = Some(Instant::now());
             let default = crate::system::audio_output().map(|(id, _)| id);
@@ -314,7 +313,6 @@ mod tests {
             assert!(started.elapsed() < Duration::from_secs(10), "no audio session from the child");
             std::thread::sleep(Duration::from_millis(200));
         }
-        // what the output itself reports as playing on it
         let meter = unsafe {
             let e: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).unwrap();
             let wide: Vec<u16> = id.encode_utf16().chain(Some(0)).collect();

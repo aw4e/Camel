@@ -28,7 +28,6 @@ impl Notch {
             }
             let (enter, esc) = ui.input(|i| (i.key_pressed(Key::Enter), i.key_pressed(Key::Escape)));
             if esc {
-                // cancelled: drop the text
             } else if enter || (resp.lost_focus() && !fresh) {
                 if let Some(d) = focus::parse_duration(&buf) {
                     self.focus.set_duration(d);

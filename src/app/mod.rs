@@ -1,3 +1,6 @@
+//! The `Notch` app state and the frame loop. `ui()` picks the mode (closed pill, open page, toast, Spotlight), springs
+//! the body size, resizes the OS window to fit (`fit_window`) and calls the page drawer for the current `Tab`.
+
 mod draw;
 pub(crate) mod icons;
 pub(crate) mod layout;
@@ -221,6 +224,8 @@ pub(crate) struct Notch {
     pending: Option<(apps::App, Instant)>,
     leftovers: Option<Vec<PathBuf>>,
     leftover_name: String,
+    /// Set after a Clean up left locked files behind: the next click deletes them for good at restart.
+    leftovers_locked: bool,
     toast: Option<Toast>,
     clip_seq: u32,
     prev_charging: Option<bool>,
@@ -332,6 +337,7 @@ impl Notch {
             pending: record.pending.map(|a| (a, Instant::now())),
             leftovers: Some(record.leftovers).filter(|l| !l.is_empty()),
             leftover_name: record.leftover_name,
+            leftovers_locked: false,
             toast: None,
             clip_seq: monitor::clipboard_seq(),
             prev_charging: None,
@@ -877,7 +883,10 @@ impl Notch {
         }
         let shape_moving = !self.w.settled(target.x) || !self.h.settled(target.y);
         let win_h = if mode == Mode::Compact && self.settings.minimal { MINIMAL_WIN_H } else { target.y };
-        let want = vec2((target.x + 2.0 * EAR).round(), win_h.round());
+        // whole physical pixels, or fractional display scaling clips the body by a pixel
+        let ppp = ctx.pixels_per_point();
+        let snap = |v: f32| (v * ppp).ceil() / ppp;
+        let want = vec2(snap(target.x + 2.0 * EAR), snap(win_h));
         let win = if shape_moving { self.win.max(want) } else { want };
         // Spotlight floats at 22% of the screen height like macOS; everything else hangs from the top edge.
         let monitor = ctx.input(|i| i.viewport().monitor_size);
@@ -1118,9 +1127,8 @@ impl eframe::App for Notch {
                 ui.painter().rect_filled(r, 20.0, Color32::from_rgb(28, 28, 30));
                 ui.painter().rect_stroke(r, 20.0, Stroke::new(1.0, fill(30)), StrokeKind::Inside);
             } else {
-                // the corner radii grow with the body: top 6 -> 19, bottom 14 -> 24
                 let k = ((h - PILL_H) / 120.0).clamp(0.0, 1.0);
-                ui::notch_shape(ui.painter(), body, (6.0 + 13.0 * k).min(h), (14.0 + 10.0 * k).min(h));
+                ui::notch_shape(ui.painter(), body, (6.0 + 13.0 * k).min(h * 0.5), (14.0 + 10.0 * k).min(h));
             }
             ui.set_clip_rect(body.intersect(ui.clip_rect()));
 

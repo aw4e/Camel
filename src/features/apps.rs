@@ -6,7 +6,9 @@ use std::borrow::Cow;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use windows::Win32::UI::Shell::{FO_DELETE, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, SHFILEOPSTRUCTW, SHFileOperationW, ShellExecuteW};
+use windows::Win32::UI::Shell::{
+    FO_DELETE, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FOF_WANTNUKEWARNING, SHFILEOPSTRUCTW, SHFileOperationW, ShellExecuteW,
+};
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 use windows::core::{HSTRING, PCWSTR, w};
 use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_SET_VALUE, REG_BINARY};
@@ -135,10 +137,39 @@ fn shell_open(target: &str, args: &str) -> bool {
     r.0 as isize > 32
 }
 
-/// Starts the program's own uninstaller.
+/// Starts the program's own uninstaller. A per-user (HKCU) entry can be written by any process the user runs, so it is
+/// started through Explorer, unelevated: the elevated Camel must never run it with administrator rights. A
+/// machine-wide (HKLM) entry is admin-written and starts directly.
 pub fn uninstall(app: &App) -> bool {
     let (exe, args) = split_command(&app.uninstall);
-    shell_open(&exe, &args)
+    if app.scope == Scope::User { shell_open_unelevated(&exe, &args) } else { shell_open(&exe, &args) }
+}
+
+/// Runs `target` as the signed-in user, without Camel's elevation, by asking the desktop Explorer window to start it
+/// (the documented "ShellWindows -> IShellDispatch2::ShellExecute" route). Fails, and starts nothing, if Explorer
+/// is not running.
+fn shell_open_unelevated(target: &str, args: &str) -> bool {
+    use windows::Win32::System::Com::{CLSCTX_LOCAL_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, IServiceProvider};
+    use windows::Win32::System::Variant::VARIANT;
+    use windows::Win32::UI::Shell::{
+        CSIDL_DESKTOP, IShellBrowser, IShellDispatch2, IShellFolderViewDual, IShellWindows, SID_STopLevelBrowser, SVGIO_BACKGROUND, SWC_DESKTOP,
+        SWFO_NEEDDISPATCH, ShellWindows,
+    };
+    use windows::core::{BSTR, Interface};
+    let run = || -> windows::core::Result<()> {
+        unsafe {
+            // already initialised on the UI thread (OLE drag and drop) is fine; the result is not needed
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            let windows: IShellWindows = CoCreateInstance(&ShellWindows, None, CLSCTX_LOCAL_SERVER)?;
+            let mut hwnd = 0;
+            let desktop = windows.FindWindowSW(&VARIANT::from(CSIDL_DESKTOP as i32), &VARIANT::default(), SWC_DESKTOP, &mut hwnd, SWFO_NEEDDISPATCH)?;
+            let browser: IShellBrowser = desktop.cast::<IServiceProvider>()?.QueryService(&SID_STopLevelBrowser)?;
+            let view: IShellFolderViewDual = browser.QueryActiveShellView()?.GetItemObject(SVGIO_BACKGROUND)?;
+            let shell: IShellDispatch2 = view.Application()?.cast()?;
+            shell.ShellExecute(&BSTR::from(target), &VARIANT::from(args), &VARIANT::from(""), &VARIANT::from("open"), &VARIANT::from(1i32))
+        }
+    };
+    run().is_ok()
 }
 
 pub fn open_location(app: &App) -> bool {
@@ -160,12 +191,21 @@ fn safe_name(n: &str) -> bool {
     n.chars().count() >= 4 && !n.ends_with('.') && !n.contains(['\\', '/', ':', '*', '?', '"', '<', '>', '|']) && !GENERIC.contains(&n.to_lowercase().as_str())
 }
 
-/// A folder deep enough to be one program's own, and not one of the shared roots.
+/// A folder deep enough to be one program's own: never a shared root, nothing under Windows, WindowsApps, or the
+/// user's own folders (Documents, Desktop, Downloads...). The registry `InstallLocation` is only a claim, and a
+/// per-user entry can be written by any process, so this is the line between "leftover" and "the user's files".
 fn safe_dir(p: &Path) -> bool {
-    let shared = ["SystemRoot", "ProgramFiles", "ProgramFiles(x86)", "ProgramData", "USERPROFILE", "APPDATA", "LOCALAPPDATA"];
+    let env = |v: &str| std::env::var_os(v).map(PathBuf::from);
+    let roots = ["ProgramFiles", "ProgramFiles(x86)", "ProgramData", "USERPROFILE", "APPDATA", "LOCALAPPDATA"];
+    let profile = env("USERPROFILE");
+    let user_folders = ["Desktop", "Documents", "Downloads", "Music", "Pictures", "Videos", "OneDrive", "Favorites"];
+    let below = |d: Option<PathBuf>| d.is_some_and(|d| p.starts_with(d));
     p.is_absolute()
         && p.components().count() >= 4
-        && !shared.iter().filter_map(std::env::var_os).any(|d| Path::new(&d) == p || p.starts_with(Path::new(&d).join("System32")))
+        && !below(env("SystemRoot"))
+        && !roots.iter().filter_map(|v| env(v)).any(|d| d == p)
+        && !["ProgramFiles", "ProgramFiles(x86)"].iter().any(|v| below(env(v).map(|d| d.join("WindowsApps"))))
+        && !user_folders.iter().any(|f| below(profile.as_ref().map(|d| d.join(f))))
 }
 
 /// Folders that may be left behind after the uninstaller finished: the install folder itself, and folders named exactly
@@ -173,8 +213,16 @@ fn safe_dir(p: &Path) -> bool {
 pub fn leftovers(app: &App) -> Vec<PathBuf> {
     let mut names = vec![app.name.clone()];
     let mut found = Vec::new();
+    // a folder another still-installed program lives in (or under) is not a leftover
+    let others: Vec<PathBuf> = list()
+        .into_iter()
+        .filter(|o| o.key_path != app.key_path)
+        .map(|o| PathBuf::from(o.location.trim_matches('"')))
+        .filter(|l| l.components().count() >= 3)
+        .collect();
+    let in_use = |p: &Path| others.iter().any(|o| o.starts_with(p) || p.starts_with(o));
     let loc = PathBuf::from(app.location.trim_matches('"'));
-    if !app.location.trim().is_empty() && safe_dir(&loc) && loc.is_dir() {
+    if !app.location.trim().is_empty() && safe_dir(&loc) && loc.is_dir() && !in_use(&loc) {
         if let Some(leaf) = loc.file_name() {
             names.push(leaf.to_string_lossy().into_owned());
         }
@@ -184,7 +232,7 @@ pub fn leftovers(app: &App) -> Vec<PathBuf> {
         let Some(base) = std::env::var_os(var) else { continue };
         for n in names.iter().filter(|n| safe_name(n)) {
             let p = Path::new(&base).join(n.trim());
-            if p.is_dir() && !found.contains(&p) {
+            if p.is_dir() && !found.contains(&p) && !in_use(&p) {
                 found.push(p);
             }
         }
@@ -192,7 +240,8 @@ pub fn leftovers(app: &App) -> Vec<PathBuf> {
     found
 }
 
-/// Sends the folders to the Recycle Bin, so it can always be undone.
+/// Sends the folders to the Recycle Bin. When one cannot go there (too big, a removable drive), Windows asks before
+/// deleting it for good (`FOF_WANTNUKEWARNING`) instead of doing so silently.
 pub fn recycle(paths: &[PathBuf]) -> bool {
     let mut wide: Vec<u16> = Vec::new();
     for p in paths {
@@ -203,7 +252,7 @@ pub fn recycle(paths: &[PathBuf]) -> bool {
     let mut op = SHFILEOPSTRUCTW {
         wFunc: FO_DELETE,
         pFrom: PCWSTR(wide.as_ptr()),
-        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT).0 as u16,
+        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT | FOF_WANTNUKEWARNING).0 as u16,
         ..Default::default()
     };
     unsafe { SHFileOperationW(&mut op) == 0 && !op.fAnyOperationsAborted.as_bool() }
@@ -273,7 +322,7 @@ pub fn save_record(r: &Record) {
         if let Some(dir) = p.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let _ = std::fs::write(p, json);
+        let _ = crate::settings::write_atomic(&p, json.as_bytes());
     }
 }
 
@@ -383,6 +432,18 @@ pub fn set_startup(item: &Startup, on: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn leftover_folders_never_reach_windows_or_the_users_files() {
+        let home = PathBuf::from(std::env::var_os("USERPROFILE").unwrap());
+        let windows = PathBuf::from(std::env::var_os("SystemRoot").unwrap());
+        assert!(!safe_dir(&windows.join(r"SysWOW64\drivers\x")));
+        assert!(!safe_dir(&home.join(r"Documents\My Games\Thing")));
+        assert!(!safe_dir(&home.join(r"Downloads\setup\app")));
+        assert!(!safe_dir(Path::new(r"C:\Program Files\WindowsApps\Pkg_1.0")));
+        assert!(!safe_dir(&PathBuf::from(std::env::var_os("ProgramFiles").unwrap())));
+        assert!(safe_dir(&home.join(r"AppData\Local\SomeApp")));
+    }
 
     #[test]
     fn splits_uninstall_commands() {

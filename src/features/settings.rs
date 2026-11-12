@@ -1,5 +1,7 @@
+//! User settings, stored as JSON under %APPDATA%, plus autostart through a scheduled task.
+
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Bumped when a default changes in a way that should reach files that already exist.
 const VERSION: u32 = 2;
@@ -65,9 +67,13 @@ impl Default for Settings {
     }
 }
 
+/// %APPDATA%\Camel: settings, reminders and the crash log live here.
+pub fn data_dir() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("Camel"))
+}
+
 fn path() -> PathBuf {
-    let base = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
-    base.join("Camel").join("settings.json")
+    data_dir().unwrap_or_else(|| std::env::temp_dir().join("Camel")).join("settings.json")
 }
 
 impl Settings {
@@ -79,13 +85,13 @@ impl Settings {
         s
     }
 
-    /// Brings a settings file from before a default changed up to date. A file from before the weather was switched on by
-    /// default carries `weather: false` that nobody chose, so it is turned on once. Returns whether anything changed.
+    /// Stamps an older file with the current version. Never flips a user choice: switching the weather (which sends a
+    /// rough location to open-meteo) back on for someone who turned it off would share data without consent.
+    /// Returns whether anything changed.
     fn migrate(&mut self) -> bool {
         if self.version >= VERSION {
             return false;
         }
-        self.weather = true;
         self.version = VERSION;
         true
     }
@@ -114,7 +120,7 @@ impl Settings {
             let _ = std::fs::create_dir_all(dir);
         }
         if let Ok(json) = serde_json::to_string_pretty(self) {
-            let _ = std::fs::write(p, json);
+            let _ = write_atomic(&p, json.as_bytes());
         }
     }
 }
@@ -127,6 +133,14 @@ fn schtasks(args: &[&str]) -> bool {
 }
 
 /// The real state, not the saved setting: a task or a `Run` entry exists.
+/// Writes `bytes` to a sibling `.tmp` file, then renames it over `path`. A crash or power loss mid-save leaves the old
+/// file intact instead of an empty one (a plain `fs::write` truncates first, and `load` would then fall back to defaults).
+pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, path)
+}
+
 pub fn autostart_enabled() -> bool {
     use winreg::{RegKey, enums::*};
     let in_run = RegKey::predef(HKEY_CURRENT_USER).open_subkey(RUN_KEY).is_ok_and(|k| k.get_value::<String, _>("Camel").is_ok());
@@ -134,7 +148,7 @@ pub fn autostart_enabled() -> bool {
 }
 
 /// Starts Camel at logon. A program that asks for administrator rights is silently skipped when it starts from the
-/// `Run` key, so the release exe is registered as a scheduled task with the highest run level instead. The plain `Run`
+/// `Run` key, so the release exe is registered as a scheduled task instead, elevated only from Program Files. The plain `Run`
 /// entry is the fallback when the task cannot be created (an unelevated debug build). Returns whether the requested
 /// state was reached: a task made by an elevated Camel cannot be deleted by an unelevated one.
 pub fn set_autostart(on: bool) -> bool {
@@ -148,10 +162,15 @@ pub fn set_autostart(on: bool) -> bool {
         return !autostart_enabled();
     }
     let Ok(exe) = std::env::current_exe() else { return false };
-    let file = std::env::temp_dir().join("camel-task.xml");
+    // A fresh, unpredictable name opened with create_new: a fixed name in %TEMP% could be swapped by another process
+    // between the write and schtasks reading it, registering its own command to run elevated at logon.
+    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let file = std::env::temp_dir().join(format!("camel-task-{}-{nonce}.xml", std::process::id()));
     // schtasks wants UTF-16 with a byte order mark
-    let utf16: Vec<u8> = std::iter::once(0xFEFFu16).chain(task_xml(&exe.to_string_lossy()).encode_utf16()).flat_map(u16::to_le_bytes).collect();
-    let made = std::fs::write(&file, utf16).is_ok() && schtasks(&["/Create", "/TN", "Camel", "/XML", &file.to_string_lossy(), "/F"]);
+    let utf16: Vec<u8> =
+        std::iter::once(0xFEFFu16).chain(task_xml(&exe.to_string_lossy(), admin_only_folder(&exe)).encode_utf16()).flat_map(u16::to_le_bytes).collect();
+    let written = std::fs::OpenOptions::new().write(true).create_new(true).open(&file).and_then(|mut f| std::io::Write::write_all(&mut f, &utf16));
+    let made = written.is_ok() && schtasks(&["/Create", "/TN", "Camel", "/XML", &file.to_string_lossy(), "/F"]);
     let _ = std::fs::remove_file(&file);
     if let Some(k) = run() {
         if made {
@@ -167,13 +186,21 @@ fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
-/// Logon task, highest run level, and none of the schtasks defaults that stop a task on battery power.
-fn task_xml(exe: &str) -> String {
+/// True when `exe` lives under Program Files, which only administrators can write. Only then may the logon task run
+/// elevated: from a user-writable folder (Downloads), any process could swap the exe or plant a DLL beside it and be
+/// started as administrator at the next logon without a UAC prompt.
+fn admin_only_folder(exe: &Path) -> bool {
+    ["ProgramFiles", "ProgramFiles(x86)"].iter().filter_map(std::env::var_os).any(|d| exe.starts_with(d))
+}
+
+/// Logon task (elevated only when `elevated`), and none of the schtasks defaults that stop a task on battery power.
+fn task_xml(exe: &str, elevated: bool) -> String {
+    let level = if elevated { "HighestAvailable" } else { "LeastPrivilege" };
     format!(
         r#"<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers><LogonTrigger><Enabled>true</Enabled></LogonTrigger></Triggers>
-  <Principals><Principal id="Author"><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals>
+  <Principals><Principal id="Author"><LogonType>InteractiveToken</LogonType><RunLevel>{level}</RunLevel></Principal></Principals>
   <Settings>
     <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
@@ -182,7 +209,7 @@ fn task_xml(exe: &str) -> String {
   </Settings>
   <Actions Context="Author"><Exec><Command>{}</Command></Exec></Actions>
 </Task>"#,
-        xml_escape(exe)
+        xml_escape(exe),
     )
 }
 
@@ -191,9 +218,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn task_xml_runs_elevated_on_battery_and_escapes_the_path() {
-        let x = task_xml(r"C:\Tom & Jerry\camel.exe");
+    fn task_xml_runs_on_battery_escapes_the_path_and_elevates_only_from_program_files() {
+        let x = task_xml(r"C:\Tom & Jerry\camel.exe", true);
         assert!(x.contains("<RunLevel>HighestAvailable</RunLevel>"));
+        assert!(task_xml("c.exe", false).contains("<RunLevel>LeastPrivilege</RunLevel>"));
+        assert!(!admin_only_folder(Path::new(r"C:\Users\me\Downloads\camel.exe")));
         assert!(x.contains("<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>"));
         assert!(x.contains(r"<Command>C:\Tom &amp; Jerry\camel.exe</Command>"));
     }
@@ -215,12 +244,11 @@ mod tests {
     }
 
     #[test]
-    fn an_old_file_gets_the_weather_default_once() {
+    fn migrating_an_old_file_keeps_the_users_choices() {
         let mut old: Settings = serde_json::from_str(r#"{"lyrics":true,"weather":false}"#).unwrap();
         assert_eq!(old.version, 0, "a file without a version is older than any version");
-        assert!(old.migrate() && old.weather && old.version == VERSION);
-        old.weather = false;
-        assert!(!old.migrate() && !old.weather, "after that the choice is the user's");
+        assert!(old.migrate() && !old.weather && old.version == VERSION, "weather stays off");
+        assert!(!old.migrate());
         assert!(Settings::default().weather && Settings::default().version == VERSION);
     }
 }

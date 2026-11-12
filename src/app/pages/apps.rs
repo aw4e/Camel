@@ -36,7 +36,6 @@ impl Notch {
             }
         }
 
-        // search box, programs view only
         if !self.apps_startup {
             let sr = Rect::from_min_max(o + vec2(MARGIN + 144.0 + GAP_L, TOP), o + vec2(OPEN_W - MARGIN, TOP + 20.0));
             p.rect_filled(sr, 10.0, fade(fill(16), a));
@@ -175,11 +174,12 @@ impl Notch {
         }
 
         if clean && let Some(found) = self.leftovers.clone() {
+            // First click: Recycle Bin only (undoable). Whatever is still there is locked (a shell extension Explorer has
+            // loaded); only a second, explicit click queues that for permanent deletion at the next restart.
+            let confirmed = std::mem::take(&mut self.leftovers_locked);
             apps::recycle(&found);
-            // keep whatever is still there, so a failed Clean up can simply be tried again
             let mut left: Vec<PathBuf> = found.iter().filter(|p| p.exists()).cloned().collect();
-            // a file Explorer still has loaded (a shell extension) cannot go to the Recycle Bin: queue it for the next restart
-            let queued = !left.is_empty() && apps::delete_on_reboot(&left);
+            let queued = confirmed && !left.is_empty() && apps::delete_on_reboot(&left);
             if queued {
                 left.clear();
             }
@@ -192,14 +192,16 @@ impl Notch {
                 };
                 self.show_toast(ToastIcon::Apps, title, body);
             } else {
-                let body = format!("{} folder(s) left, try again", left.len());
+                let body = format!("{} locked folder(s). Click Clean up again to delete them for good at restart", left.len());
                 self.leftovers = Some(left);
-                self.show_toast(ToastIcon::Apps, "Could not clean up", body);
+                self.leftovers_locked = !confirmed;
+                self.show_toast(ToastIcon::Apps, "Some files are in use", body);
             }
             self.save_record();
         }
         if dismiss {
             self.leftovers = None;
+            self.leftovers_locked = false;
             self.save_record();
         }
         if let Some((i, remove)) = act

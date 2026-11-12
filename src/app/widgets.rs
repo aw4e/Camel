@@ -1,3 +1,5 @@
+//! Small drawing helpers and text utilities shared by the pages.
+
 use crate::media;
 use crate::prelude::*;
 
@@ -44,6 +46,19 @@ pub(crate) fn shorten(s: &str, max: usize) -> String {
         return s.to_owned();
     }
     s.chars().take(max - 1).chain(['…']).collect()
+}
+
+/// One line of bold text, shrunk in 0.5 px steps (down to 8 px) until it is at most `room` wide. Display scaling
+/// changes glyph widths, so a fixed size that fits at 100% can overflow at 125% or 150%.
+pub(crate) fn fit_bold(p: &egui::Painter, text: &str, size: f32, room: f32, color: Color32) -> std::sync::Arc<egui::Galley> {
+    let mut size = size;
+    loop {
+        let g = p.layout_no_wrap(text.to_owned(), bold(size), color);
+        if g.size().x <= room || size <= 8.0 {
+            return g;
+        }
+        size -= 0.5;
+    }
 }
 
 pub(crate) fn hsv(h: f32, s: f32, v: f32) -> Color32 {

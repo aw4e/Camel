@@ -118,6 +118,8 @@ pub fn read_clipboard() -> Clip {
         return Clip::Text(t);
     }
     match cb.get_image() {
+        // check the size before copying: a huge picture would otherwise allocate gigabytes and abort the app
+        Ok(img) if (img.width as u64) * (img.height as u64) > crate::clipboard::MAX_PIXELS => Clip::Other,
         Ok(img) => Clip::Image { w: img.width, h: img.height, rgba: img.bytes.into_owned() },
         Err(_) => Clip::Other,
     }

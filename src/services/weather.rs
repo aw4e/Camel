@@ -46,16 +46,19 @@ impl Service {
             unsafe { RoInitialize(RO_INIT_MULTITHREADED).ok() };
             let (mut on, mut city) = (enabled, city);
             let mut refresh = true;
+            let mut wait = REFRESH;
             loop {
                 if on && refresh {
                     let status = match locate(&city) {
                         None => Status::NoLocation,
                         Some(at) => fetch(at).map_or_else(Status::Failed, Status::Ready),
                     };
+                    // location permission can be switched on any time, so a missing location is asked for again soon
+                    wait = if matches!(status, Status::NoLocation) { Duration::from_secs(60) } else { REFRESH };
                     *state.lock().unwrap_or_else(PoisonError::into_inner) = status;
                 }
                 refresh = true;
-                match rx.recv_timeout(REFRESH) {
+                match rx.recv_timeout(wait) {
                     Ok(Msg::Enable(v)) => {
                         on = v;
                         *state.lock().unwrap_or_else(PoisonError::into_inner) = if v { Status::Loading } else { Status::Off };

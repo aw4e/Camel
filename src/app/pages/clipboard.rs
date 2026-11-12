@@ -23,7 +23,6 @@ impl Notch {
         );
 
         self.clip_scroll = self.clip_scroll.min(n.saturating_sub(3));
-        // thumbnails of pictures that left the history are dropped
         let alive: std::collections::HashSet<u64> =
             self.history.items().iter().filter_map(|s| if let clipboard::Item::Image(p) = &s.item { Some(p.id) } else { None }).collect();
         self.clip_thumbs.retain(|k, _| alive.contains(k));
@@ -56,7 +55,6 @@ impl Notch {
                             egui::TextureOptions::LINEAR,
                         )
                     });
-                    // the thumbnail is fitted into a 30 x 16 box, keeping its proportions
                     let s = (30.0 / tw as f32).min(16.0 / th as f32);
                     let thumb = Rect::from_center_size(pos2(row.left() + ROW_PAD + 15.0, row.center().y), vec2(tw as f32 * s, th as f32 * s));
                     egui::Image::new(&*tex).corner_radius(3).tint(fade(Color32::WHITE, a)).paint_at(ui, thumb);

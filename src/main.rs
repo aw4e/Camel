@@ -1,5 +1,8 @@
 #![windows_subsystem = "windows"]
 
+//! Camel: a macOS-style notch for Windows. Entry point: opens one borderless, transparent, always-on-top egui
+//! window. `app` draws it, `features` holds pure logic (testable without Windows), `services` talks to the OS and network.
+
 mod app;
 mod features;
 mod services;
@@ -15,6 +18,26 @@ use layout::{PILL_H, PILL_W};
 use settings::Settings;
 
 fn main() -> eframe::Result {
+    // release builds abort on panic with no console, so keep the reason in %APPDATA%\Camel\crash.log
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if let Some(dir) = settings::data_dir() {
+            let _ = std::fs::create_dir_all(&dir);
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("crash.log")) {
+                let _ = std::io::Write::write_all(
+                    &mut f,
+                    format!(
+                        "{} v{}: {info}
+",
+                        chrono::Local::now().to_rfc3339(),
+                        update::VERSION
+                    )
+                    .as_bytes(),
+                );
+            }
+        }
+        default_hook(info);
+    }));
     #[cfg(not(debug_assertions))]
     platform::ensure_admin();
     update::cleanup();

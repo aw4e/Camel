@@ -1,3 +1,5 @@
+//! Drawing that is not a page: the closed pill (art, lyric line, clock, battery ring), the tab bar and the toast.
+
 use crate::app::{GROUPS, MAIN_TABS, Notch, Tab, ToastIcon, group_of, tab_icon, tab_label, tab_name};
 use crate::prelude::*;
 use crate::{media, update};
@@ -68,7 +70,6 @@ impl Notch {
             let galley = p.layout_no_wrap(text, bold(12.0), fade(color, a));
             let half_w = galley.size().x / 2.0;
             p.galley(pos2(c.x - half_w, c.y - galley.size().y / 2.0), galley, color);
-            // left of the clock: the temperature, then the keep-awake sun
             let mut left = c.x - half_w - 8.0;
             if let crate::weather::Status::Ready(w) = self.weather.status() {
                 let temp = p.layout_no_wrap(format!("{:.0}°", w.temp), font(11.0), fade(GRAY, a));
@@ -207,7 +208,6 @@ impl Notch {
         let track = Rect::from_min_size(o + vec2(12.0, 16.0 - track_h / 2.0), vec2(offsets[last] + widths[last] + 2.0 * TAB_INSET, track_h));
         p.rect_filled(track, track_h / 2.0, fade(fill(14), a));
         let tab_rect = |i: usize| Rect::from_min_size(track.min + vec2(TAB_INSET + offsets[i], TAB_INSET), vec2(widths[i], TAB_PILL_H));
-        // a lighter backing behind the open group, and a thin line between groups
         if let Some(g) = chosen_group {
             let members: Vec<usize> = (0..MAIN_TABS.len()).filter(|i| group_ids[*i] == g).collect();
             let (first, end) = (tab_rect(members[0]), tab_rect(*members.last().unwrap_or(&0)));
@@ -236,7 +236,6 @@ impl Notch {
             let col = if chosen || resp.hovered() { Color32::WHITE } else { GRAY };
             let icon_at = pos2(r.left() + TAB_W / 2.0, r.center().y);
             ui::scaled(&p, icon_at, ui::icon_fit(TAB_PILL_H), || tab_icon(*tab)(&p, icon_at, fade(col, a)));
-            // the name fades in as the pill opens
             let open = ((widths[i] - TAB_W) / (tab_open_w(names[i].size().x) - TAB_W)).clamp(0.0, 1.0);
             if open > 0.05 {
                 let text_at = pos2(r.left() + TAB_W - GAP_S + 2.0, r.center().y - names[i].size().y / 2.0);

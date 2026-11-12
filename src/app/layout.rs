@@ -1,3 +1,6 @@
+//! Every size and spacing in the UI, in egui points (1 point = 1 px at 100% display scale; egui scales for the rest).
+//! Change sizes here, not in the pages. The tests at the bottom fail when a page would no longer fit its height.
+
 use eframe::egui::{Vec2, vec2};
 
 pub(crate) const PILL_W: f32 = 196.0;
@@ -7,21 +10,21 @@ pub(crate) const LYRIC_PAD: f32 = 76.0;
 pub(crate) const LYRIC_MAX_W: f32 = 380.0;
 pub(crate) const OPEN_W: f32 = 460.0;
 pub(crate) const OPEN_H: f32 = 136.0;
-/// The mixer page: strips 152 px tall, and one standard gap (13) below them.
-pub(crate) const MIXER_H: f32 = TOP + 152.0 + 13.0;
+/// The mixer page: strips 152 px tall, and the side margin (16) below them so the round bottom corners clear the cards.
+pub(crate) const MIXER_H: f32 = TOP + 152.0 + MARGIN;
 /// The Controls page has room to breathe: three rows of 34 px tiles with 8 px gaps, and one standard gap (13) below.
 pub(crate) const CONTROLS_TILE_H: f32 = 34.0;
 pub(crate) const CONTROLS_H: f32 = TOP + 3.0 * CONTROLS_TILE_H + 2.0 * 8.0 + 13.0;
 /// Transparent margin each side of the body, room for the flared top corners.
 pub(crate) const EAR: f32 = 19.0;
 /// The closed notch in minimal mode: a thin line in a taller, transparent window so it is easy to hover.
-pub(crate) const MINIMAL: Vec2 = vec2(72.0, 5.0);
+pub(crate) const MINIMAL: Vec2 = vec2(96.0, 6.0);
 pub(crate) const MINIMAL_WIN_H: f32 = 14.0;
 pub(crate) const TOAST: Vec2 = vec2(300.0, 44.0);
 // Outer margins sit on a 4 px grid. Proportions use the golden ratio, and inner gaps come from the Fibonacci scale
 // (3, 5, 8, 13, 21, 34), whose neighbouring steps keep that ratio, so nested paddings never look arbitrary.
 // The tests at the bottom of this file pin these numbers.
-pub(crate) const PHI: f32 = 1.618_034;
+pub(crate) const PHI: f32 = std::f32::consts::GOLDEN_RATIO;
 /// Left and right margin of every screen.
 pub(crate) const MARGIN: f32 = 16.0;
 /// Content starts one Fibonacci step (5) below the tab bar, which ends at y = 30.

@@ -59,13 +59,10 @@ impl Notch {
                     a,
                 ),
             );
-            p.with_clip_rect(tile).text(
-                pos2(badge.x + 12.0 + GAP, tile.center().y),
-                Align2::LEFT_CENTER,
-                label,
-                bold(11.5),
-                fade(if available { Color32::WHITE } else { DIM }, a),
-            );
+            let room = tile.right() - GAP - (badge.x + 12.0 + GAP);
+            let color = fade(if available { Color32::WHITE } else { DIM }, a);
+            let galley = crate::widgets::fit_bold(&p, label, 11.5, room, color);
+            p.galley(pos2(badge.x + 12.0 + GAP, tile.center().y - galley.size().y / 2.0), galley, color);
             if resp.clicked() && available {
                 clicked = Some(i);
             }

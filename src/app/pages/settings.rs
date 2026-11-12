@@ -9,7 +9,6 @@ impl Notch {
     pub(crate) fn tab_settings(&mut self, ui: &mut egui::Ui, o: egui::Pos2, a: f32) {
         let p = ui.painter().clone();
 
-        // the groups, as chips in a row
         let mut x = o.x + MARGIN;
         for (i, name) in PAGES.iter().enumerate() {
             let galley = p.layout_no_wrap((*name).to_owned(), bold(11.0), Color32::WHITE);
@@ -57,7 +56,6 @@ impl Notch {
             ],
         };
 
-        // two columns, filled top to bottom
         let gw = (OPEN_W - 2.0 * MARGIN - GAP) / 2.0;
         let per_column = items.len().div_ceil(2);
         let mut columns: [Vec<(&str, &mut bool)>; 2] = [Vec::new(), Vec::new()];

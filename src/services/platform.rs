@@ -1,3 +1,5 @@
+//! Process-level Windows glue: elevation, global hotkey, tray menu, fonts, window frame.
+
 use eframe::egui;
 use global_hotkey::hotkey::{Code, HotKey, Modifiers as HkMods};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};

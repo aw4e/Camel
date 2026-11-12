@@ -1,3 +1,5 @@
+//! Imports every page file needs.
+
 pub(crate) use crate::layout::*;
 pub(crate) use crate::ui::{self, BLUE, DIM, GRAY, GREEN, ORANGE, RED, bold, fade, fill, font};
 pub(crate) use crate::widgets::*;

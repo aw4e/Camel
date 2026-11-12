@@ -1,3 +1,5 @@
+//! The Spotlight search box (global hotkey): query field, result list, keyboard navigation.
+
 use crate::app::Notch;
 use crate::prelude::*;
 use crate::{actions, spotlight};

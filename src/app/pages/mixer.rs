@@ -5,7 +5,8 @@ use crate::prelude::*;
 
 /// Height of a strip: name, level, fader with its meter, mute button and the apps in the channel.
 const STRIP_H: f32 = 152.0;
-const FADER: (f32, f32) = (34.0, 100.0);
+/// The fader ends 8 px above the mute button so the knob at zero (4.5 px below the track end) never touches it.
+const FADER: (f32, f32) = (34.0, 95.0);
 
 impl Notch {
     /// A channel mixer in the style of Elgato Wave Link: apps are grouped into channels, a fader per channel sets the
@@ -56,7 +57,8 @@ impl Notch {
             p.rect_filled(card, 12.0, fade(fill(14), a));
             let cx = card.center().x;
             let dim = if empty { DIM } else { Color32::WHITE };
-            p.text(pos2(cx, card.top() + 11.0), Align2::CENTER_CENTER, name, bold(10.5), fade(if master { Color32::WHITE } else { dim }, a));
+            let title = crate::widgets::fit_bold(&p, name, 10.5, w - 8.0, fade(if master { Color32::WHITE } else { dim }, a));
+            p.galley(pos2(cx - title.size().x / 2.0, card.top() + 11.0 - title.size().y / 2.0), title, Color32::WHITE);
 
             let fader = Rect::from_x_y_ranges(cx - 6.0..=cx + 6.0, card.top() + FADER.0..=card.top() + FADER.1);
             let shown = if empty { 1.0 } else { level };
@@ -68,7 +70,6 @@ impl Notch {
             }
             p.text(pos2(cx, card.top() + 23.0), Align2::CENTER_CENTER, format!("{:.0}", moved.unwrap_or(shown) * 100.0), font(9.0), fade(DIM, a));
 
-            // the level meter beside the fader
             let meter = Rect::from_x_y_ranges(cx + 12.0..=cx + 16.0, fader.top()..=fader.bottom());
             p.rect_filled(meter, 2.0, fade(fill(30), a));
             let height = meter.height() * peak.sqrt().clamp(0.0, 1.0);
@@ -81,8 +82,7 @@ impl Notch {
             };
             p.rect_filled(Rect::from_x_y_ranges(meter.x_range(), meter.bottom() - height..=meter.bottom()), 2.0, fade(col, a));
 
-            // mute
-            let mute = Rect::from_center_size(pos2(cx, card.top() + 112.0), vec2(w - 14.0, 18.0));
+            let mute = Rect::from_center_size(pos2(cx, card.top() + 112.0), vec2(w - 14.0, 18.0)); // spans 103..121
             let resp = hit(ui, &format!("mute{i}"), mute);
             let (bg, fg) =
                 if muted { (RED.gamma_multiply(0.35), RED) } else { (fill(if resp.hovered() && !empty { 24 } else { 18 }), if empty { DIM } else { GRAY }) };
@@ -92,7 +92,6 @@ impl Notch {
                 set_mute = Some((i, !muted));
             }
 
-            // the apps in the channel; one can be dragged onto another strip
             if let Some(strip) = strip {
                 let apps = channels::one_per_app(&strip.apps, |i| snapshot[i].0.clone());
                 let shown: Vec<usize> = apps.iter().copied().take(2).collect();
@@ -163,7 +162,6 @@ impl Notch {
             }
             if let Some(pt) = pointer {
                 let galley = p.layout_no_wrap(shorten(&name, 16), bold(10.5), fade(Color32::WHITE, a));
-                // the name hangs from the hand
                 let size = galley.size() + vec2(14.0, 6.0);
                 let hand = pt;
                 let chip = Rect::from_center_size(pos2(hand.x, (hand.y + 14.0).min(o.y + MIXER_H - size.y / 2.0 - 2.0)), size);

@@ -157,7 +157,6 @@ fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &
     let artist = crate::widgets::clean_text(&props.Artist()?.to_string());
     let playing = session.GetPlaybackInfo()?.PlaybackStatus()? == Status::Playing;
 
-    // Only re-fetch art when the track changes; reuse the old Arc otherwise.
     let prev = shared.lock().unwrap_or_else(PoisonError::into_inner).clone();
     let same_track = prev.title == title && prev.artist == artist;
     let estimate = prev.position();

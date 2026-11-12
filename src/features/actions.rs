@@ -60,8 +60,26 @@ pub fn format_duration(d: Duration) -> String {
 }
 
 /// Programs that must not be closed from a search box, however the name is typed.
-const PROTECTED: [&str; 14] =
-    ["system", "registry", "smss", "csrss", "wininit", "winlogon", "services", "lsass", "svchost", "dwm", "fontdrvhost", "explorer", "camel", "msmpeng"];
+const PROTECTED: [&str; 18] = [
+    "system",
+    "registry",
+    "smss",
+    "csrss",
+    "wininit",
+    "winlogon",
+    "services",
+    "lsass",
+    "svchost",
+    "dwm",
+    "fontdrvhost",
+    "explorer",
+    "camel",
+    "msmpeng",
+    "sihost",
+    "ctfmon",
+    "securityhealthservice",
+    "searchhost",
+];
 
 fn clean_name(n: &str) -> String {
     n.to_lowercase().trim_end_matches(".exe").to_owned()
@@ -71,7 +89,8 @@ fn protected(name: &str) -> bool {
     PROTECTED.contains(&name)
 }
 
-/// Names (without .exe) of running programs that start with `prefix`, never the protected ones.
+/// Running programs whose name (without .exe, any case) is exactly `prefix`, never the protected ones. Exact, not a
+/// prefix: Camel runs elevated, and "kill se" must not reach SecurityHealthService or SearchHost.
 fn matching_processes(prefix: &str) -> Vec<sysinfo::Pid> {
     use sysinfo::{ProcessesToUpdate, System};
     let prefix = clean_name(prefix);
@@ -81,7 +100,7 @@ fn matching_processes(prefix: &str) -> Vec<sysinfo::Pid> {
         .iter()
         .filter(|(_, p)| {
             let n = clean_name(&p.name().to_string_lossy());
-            n.starts_with(&prefix) && !protected(&n)
+            n == prefix && !protected(&n)
         })
         .map(|(pid, _)| *pid)
         .collect()
@@ -382,6 +401,8 @@ mod tests {
         assert_eq!(count_processes("camel"), 0);
         assert_eq!(count_processes("svchost.exe"), 0);
         assert_eq!(count_processes("x"), 0); // one letter would match far too much
+        assert_eq!(count_processes("sv"), 0, "a name must match exactly, not by prefix");
+        assert_eq!(count_processes("SearchHost"), 0);
         assert!(suggest("kill explorer", false, &[]).is_empty());
     }
 

@@ -13,7 +13,7 @@ const MAX_CHARS: usize = 2000;
 /// All images together stay under this; the oldest go first.
 const IMAGE_BUDGET: usize = 24 * 1024 * 1024;
 /// A bigger picture than 4096 x 4096 is not worth keeping.
-const MAX_PIXELS: u64 = 4096 * 4096;
+pub(crate) const MAX_PIXELS: u64 = 4096 * 4096;
 
 #[derive(Clone)]
 pub struct Pic {
@@ -213,7 +213,6 @@ mod tests {
 
     #[test]
     fn smooth_pictures_compress_well() {
-        // a gradient, like a wallpaper or a UI screenshot
         let (w, h) = (400usize, 200usize);
         let raw: Vec<u8> = (0..w * h).flat_map(|i| [((i % w) * 255 / w) as u8, ((i / w) * 255 / h) as u8, 128, 255]).collect();
         let p = make_pic(w, h, raw.clone()).unwrap();

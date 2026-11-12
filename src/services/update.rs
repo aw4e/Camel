@@ -150,7 +150,9 @@ fn download(release: &Release, to: &Path) -> Result<(), String> {
     }
     let mut resp = agent().get(&release.url).header("User-Agent", "camel-updater").call().map_err(|e| format!("download failed: {e}"))?;
     let mut reader = resp.body_mut().with_config().limit(MAX_DOWNLOAD).reader();
-    let mut out = std::fs::File::create(to).map_err(|e| format!("cannot write next to the program: {e}"))?;
+    // remove, then create_new: never write through a file or link someone else left at this path
+    let _ = std::fs::remove_file(to);
+    let mut out = std::fs::OpenOptions::new().write(true).create_new(true).open(to).map_err(|e| format!("cannot write next to the program: {e}"))?;
     std::io::copy(&mut reader, &mut out).map_err(|e| format!("download failed: {e}"))?;
     out.flush().map_err(|e| e.to_string())?;
     if !verify(to, &release.sha256) {

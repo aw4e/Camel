@@ -270,7 +270,6 @@ mod tests {
     fn search_results_must_match_the_title_and_the_length() {
         let lrc = Some("[00:01.00] a");
         let pick = |entries: Vec<Entry>, dur: f64| best(entries, "Blinding Lights", dur);
-        // the closest length wins
         let r = pick(vec![entry("Blinding Lights", 263.0, Some("[00:09.00] far")), entry("Blinding Lights", 201.0, Some("[00:01.00] near"))], 200.0);
         assert_eq!(r.as_deref(), Some("[00:01.00] near"));
         // a different song, a very different length, or no synced lyrics never count

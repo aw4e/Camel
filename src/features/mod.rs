@@ -1,3 +1,5 @@
+//! Platform-independent logic: parsing, data models, persistence. Prefer adding unit tests here.
+
 pub(crate) mod actions;
 pub(crate) mod apps;
 pub(crate) mod channels;

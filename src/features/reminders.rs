@@ -116,7 +116,7 @@ impl Reminders {
             let _ = std::fs::create_dir_all(dir);
         }
         if let Ok(json) = serde_json::to_string_pretty(&self.items) {
-            let _ = std::fs::write(p, json);
+            let _ = crate::settings::write_atomic(p, json.as_bytes());
         }
     }
 
