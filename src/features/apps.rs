@@ -149,7 +149,7 @@ pub fn uninstall(app: &App) -> bool {
 /// (the documented "ShellWindows -> IShellDispatch2::ShellExecute" route). Fails, and starts nothing, if Explorer
 /// is not running.
 fn shell_open_unelevated(target: &str, args: &str) -> bool {
-    use windows::Win32::System::Com::{CLSCTX_LOCAL_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, IServiceProvider};
+    use windows::Win32::System::Com::{CLSCTX_LOCAL_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, IDispatch, IServiceProvider};
     use windows::Win32::System::Variant::VARIANT;
     use windows::Win32::UI::Shell::{
         CSIDL_DESKTOP, IShellBrowser, IShellDispatch2, IShellFolderViewDual, IShellWindows, SID_STopLevelBrowser, SVGIO_BACKGROUND, SWC_DESKTOP,
@@ -164,7 +164,9 @@ fn shell_open_unelevated(target: &str, args: &str) -> bool {
             let mut hwnd = 0;
             let desktop = windows.FindWindowSW(&VARIANT::from(CSIDL_DESKTOP as i32), &VARIANT::default(), SWC_DESKTOP, &mut hwnd, SWFO_NEEDDISPATCH)?;
             let browser: IShellBrowser = desktop.cast::<IServiceProvider>()?.QueryService(&SID_STopLevelBrowser)?;
-            let view: IShellFolderViewDual = browser.QueryActiveShellView()?.GetItemObject(SVGIO_BACKGROUND)?;
+            // the view only hands out IDispatch for its background; IShellFolderViewDual is asked of that
+            let background: IDispatch = browser.QueryActiveShellView()?.GetItemObject(SVGIO_BACKGROUND)?;
+            let view: IShellFolderViewDual = background.cast()?;
             let shell: IShellDispatch2 = view.Application()?.cast()?;
             shell.ShellExecute(&BSTR::from(target), &VARIANT::from(args), &VARIANT::from(""), &VARIANT::from("open"), &VARIANT::from(1i32))
         }
@@ -431,6 +433,7 @@ pub fn set_startup(item: &Startup, on: bool) -> bool {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
