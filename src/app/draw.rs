@@ -26,7 +26,8 @@ impl Notch {
         }
         let p = ui.painter().clone();
         let half = rect.width() / 2.0;
-        let c = rect.center();
+        // the first row: cover, clock and equalizer; a lyric line gets a row of its own below
+        let c = pos2(rect.center().x, rect.top() + PILL_H / 2.0);
         let art = Rect::from_center_size(pos2(c.x - half + 21.0, c.y), Vec2::splat(22.0));
         match &self.art_tex {
             Some((_, tex, _)) => egui::Image::new(tex).corner_radius(5).tint(fade(Color32::WHITE, a)).paint_at(ui, art),
@@ -40,27 +41,6 @@ impl Notch {
 
         if !self.dots_active() {
             let running = self.focus.running();
-            // while a song with synced lyrics plays, the current line takes the middle; a running timer keeps it
-            let shift = self.settings.lyric_offset(&m.track_key());
-            if let Some(line) = m.lyric_line(shift).filter(|_| self.settings.lyrics && !running) {
-                // the notch grows to fit the line, the same size as the clock; a very long line gets smaller, then cut
-                let line = crate::widgets::clean_text(line);
-                let white = fade(Color32::WHITE, a);
-                let (mut size, mut galley) = (13.0, p.layout_no_wrap(line.clone(), bold(13.0), white));
-                while galley.size().x + LYRIC_PAD > LYRIC_MAX_W && size > 11.0 {
-                    size -= 0.5;
-                    galley = p.layout_no_wrap(line.clone(), bold(size), white);
-                }
-                let room = LYRIC_MAX_W - LYRIC_PAD;
-                if galley.size().x > room {
-                    let keep = (line.chars().count() as f32 * room / galley.size().x) as usize;
-                    galley = p.layout_no_wrap(crate::widgets::shorten(&line, keep.max(2)), bold(size), white);
-                }
-                self.lyric_w.set((galley.size().x + LYRIC_PAD).max(PILL_W));
-                p.galley(pos2(c.x - galley.size().x / 2.0, c.y - galley.size().y / 2.0), galley, Color32::WHITE);
-                return;
-            }
-            self.lyric_w.set(0.0);
             let (text, color) = if running {
                 let left = self.focus.remaining(Instant::now()).as_secs_f32().ceil() as u64;
                 (format!("{:02}:{:02}", left / 60, left % 60), self.phase_color())
@@ -112,6 +92,32 @@ impl Notch {
                 }
             }
         }
+        self.draw_lyric_row(&p, rect, m, a);
+    }
+
+    /// While a song with synced lyrics plays, its current line is shown under the clock. The notch grows to fit the line;
+    /// a very long line gets smaller, then is cut. `lyric_w` tells the window how wide that is, 0 when there is no line.
+    fn draw_lyric_row(&self, p: &egui::Painter, rect: Rect, m: &media::State, a: f32) {
+        let shift = self.settings.lyric_offset(&m.track_key());
+        let Some(line) = m.lyric_line(shift).filter(|_| self.settings.lyrics) else {
+            self.lyric_w.set(0.0);
+            return;
+        };
+        let line = crate::widgets::clean_text(line);
+        let white = fade(Color32::WHITE, a);
+        let room = LYRIC_MAX_W - LYRIC_PAD;
+        let (mut size, mut galley) = (12.5, p.layout_no_wrap(line.clone(), bold(12.5), white));
+        while galley.size().x > room && size > 11.0 {
+            size -= 0.5;
+            galley = p.layout_no_wrap(line.clone(), bold(size), white);
+        }
+        if galley.size().x > room {
+            let keep = (line.chars().count() as f32 * room / galley.size().x) as usize;
+            galley = p.layout_no_wrap(crate::widgets::shorten(&line, keep.max(2)), bold(size), white);
+        }
+        self.lyric_w.set(galley.size().x + LYRIC_PAD);
+        let y = rect.top() + PILL_H + 4.0;
+        p.galley(pos2(rect.center().x - galley.size().x / 2.0, y - galley.size().y / 2.0), galley, Color32::WHITE);
     }
 
     /// Version number next to Quit. It turns into an Update button when a newer release was found.

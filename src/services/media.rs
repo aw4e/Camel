@@ -31,6 +31,8 @@ pub struct State {
     /// When `pos` was read; the worker only polls twice a second.
     pub at: Option<Instant>,
     pub lyrics: Option<Arc<Lyrics>>,
+    /// When this track started to play, for the art that arrives late.
+    pub since: Option<Instant>,
 }
 
 impl State {
@@ -160,7 +162,20 @@ fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &
     let prev = shared.lock().unwrap_or_else(PoisonError::into_inner).clone();
     let same_track = prev.title == title && prev.artist == artist;
     let estimate = prev.position();
-    let art = if same_track { prev.art } else { fetch_art(&props).ok().map(Arc::new) };
+    // A player changes the title before it has the new cover ready, and Windows then hands over the old cover or none.
+    // So the cover is asked for again for a few seconds, and kept only when it really changed.
+    let since = if same_track { prev.since.unwrap_or_else(Instant::now) } else { Instant::now() };
+    let art = if should_fetch_art(same_track, since.elapsed(), prev.art.is_some()) {
+        match fetch_art(&props) {
+            Ok(new) => match prev.art {
+                Some(old) if same_track && old.rgba == new.rgba => Some(old),
+                _ => Some(Arc::new(new)),
+            },
+            Err(_) => prev.art.filter(|_| same_track),
+        }
+    } else {
+        prev.art
+    };
     // Some players (browsers, mostly) report no timeline at all. Then the position is counted here: from the start of
     // the track, or from the last line the user clicked, so lyrics can still follow along.
     let (pos, dur) = match timeline(&session, playing) {
@@ -168,8 +183,19 @@ fn tick(mgr: &mut Option<Manager>, shared: &Mutex<State>, cmds: Vec<Cmd>, lyr: &
         _ => (seek_to.unwrap_or(if same_track { estimate } else { 0.0 }), 0.0),
     };
     let lyrics = lyrics_for(lyr, &artist, &title, dur);
-    *shared.lock().unwrap_or_else(PoisonError::into_inner) = State { title, artist, playing, art, pos, dur, players, source, at: Some(Instant::now()), lyrics };
+    *shared.lock().unwrap_or_else(PoisonError::into_inner) =
+        State { title, artist, playing, art, pos, dur, players, source, at: Some(Instant::now()), lyrics, since: Some(since) };
     Ok(())
+}
+
+/// How long after a track starts its cover is asked for again every tick, and how long a track without one keeps trying.
+const ART_SETTLE: Duration = Duration::from_secs(10);
+const ART_GIVE_UP: Duration = Duration::from_secs(60);
+
+/// Whether to read the cover now: always for a new track, and for a while after it, since the cover may still be the
+/// previous track's or missing.
+fn should_fetch_art(same_track: bool, age: Duration, has_art: bool) -> bool {
+    !same_track || age < ART_SETTLE || (!has_art && age < ART_GIVE_UP)
 }
 
 fn session_id(s: &Session) -> String {
@@ -274,6 +300,16 @@ mod tests {
         assert_eq!(app_name("chrome.exe"), "chrome");
         assert_eq!(app_name("F0DC299D809B9700"), "Browser");
         assert_eq!(app_name(""), "Browser");
+    }
+
+    #[test]
+    fn the_cover_is_asked_for_again_while_a_track_is_new() {
+        let s = Duration::from_secs;
+        assert!(should_fetch_art(false, s(0), true), "a new track");
+        assert!(should_fetch_art(true, s(3), true), "the cover may still be the old one");
+        assert!(!should_fetch_art(true, s(30), true), "settled");
+        assert!(should_fetch_art(true, s(30), false), "no cover yet: keep looking");
+        assert!(!should_fetch_art(true, s(120), false), "and give up in the end");
     }
 
     #[test]

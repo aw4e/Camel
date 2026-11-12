@@ -872,8 +872,11 @@ impl Notch {
             ),
             Mode::Toast => TOAST,
             Mode::Compact if self.settings.minimal => MINIMAL,
-            Mode::Compact if self.lyric_w.get() > 0.0 && !self.dots_active() => vec2(self.lyric_w.get(), PILL_H),
-            Mode::Compact => vec2(PILL_W + if self.dots_active() { 30.0 } else { 0.0 }, PILL_H),
+            Mode::Compact => {
+                let base = PILL_W + if self.dots_active() { 30.0 } else { 0.0 };
+                let lyric = self.lyric_w.get();
+                if lyric > 0.0 { vec2(lyric.max(base), PILL_H + LYRIC_EXTRA_H) } else { vec2(base, PILL_H) }
+            }
         };
         self.w.step(target.x, dt);
         self.h.step(target.y, dt);

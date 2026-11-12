@@ -5,8 +5,10 @@ use eframe::egui::{Vec2, vec2};
 
 pub(crate) const PILL_W: f32 = 196.0;
 pub(crate) const PILL_H: f32 = 34.0;
-/// The closed notch grows to show a lyric line: room for the cover and the equalizer around it, and the widest it gets.
-pub(crate) const LYRIC_PAD: f32 = 76.0;
+/// The closed notch grows to show a lyric line under the clock: the room kept left and right of it, how much taller the
+/// notch gets, and the widest it becomes.
+pub(crate) const LYRIC_PAD: f32 = 32.0;
+pub(crate) const LYRIC_EXTRA_H: f32 = 20.0;
 pub(crate) const LYRIC_MAX_W: f32 = 380.0;
 pub(crate) const OPEN_W: f32 = 460.0;
 pub(crate) const OPEN_H: f32 = 136.0;
