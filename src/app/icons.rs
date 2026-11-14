@@ -337,6 +337,11 @@ pub fn battery_gauge(p: &Painter, left_center: Pos2, pct: u8, charging: bool, f:
     p.rect_filled(Rect::from_min_size(inner.min, vec2(inner.width() * pct as f32 / 100.0, inner.height())), 1.5, fade(level, f));
 }
 
+/// A heartbeat line, for the performance page.
+pub fn icon_pulse(p: &Painter, c: Pos2, col: Color32) {
+    path(p, c, &[(-7.5, 1.0), (-3.5, 1.0), (-1.5, -5.5), (1.5, 6.0), (3.5, 1.0), (7.5, 1.0)], 0.8, false, W, col);
+}
+
 pub fn icon_pill(p: &Painter, c: Pos2, col: Color32) {
     p.rect_filled(Rect::from_center_size(c, vec2(12.0, 3.0)), 1.5, col);
 }

@@ -26,6 +26,7 @@ fn tab_icon(t: Tab) -> fn(&egui::Painter, egui::Pos2, Color32) {
     match t {
         Tab::Media => ui::icon_music,
         Tab::Controls => ui::icon_sliders,
+        Tab::Stats => ui::icon_pulse,
         Tab::Tasks => ui::icon_tasks,
         Tab::Mixer => ui::icon_speaker,
         Tab::Clock => ui::icon_clock,
@@ -42,6 +43,7 @@ fn tab_name(t: Tab) -> &'static str {
     match t {
         Tab::Media => "Media",
         Tab::Controls => "Controls",
+        Tab::Stats => "Stats",
         Tab::Tasks => "Tasks",
         Tab::Mixer => "Mixer",
         Tab::Clock => "Clock",
@@ -57,6 +59,7 @@ fn tab_label(t: Tab) -> &'static str {
     match t {
         Tab::Media => "Now playing",
         Tab::Controls => "Controls",
+        Tab::Stats => "Performance",
         Tab::Tasks => "Tasks",
         Tab::Mixer => "Volume mixer",
         Tab::Clock => "Clock",
@@ -75,6 +78,7 @@ pub(crate) enum Tab {
     Clipboard,
     Tasks,
     Controls,
+    Stats,
     Clock,
     Timer,
     Mixer,
@@ -82,7 +86,8 @@ pub(crate) enum Tab {
     Settings,
 }
 
-pub(crate) const MAIN_TABS: [Tab; 9] = [Tab::Media, Tab::Mixer, Tab::Clock, Tab::Timer, Tab::Tasks, Tab::Shelf, Tab::Clipboard, Tab::Controls, Tab::Apps];
+pub(crate) const MAIN_TABS: [Tab; 10] =
+    [Tab::Media, Tab::Mixer, Tab::Clock, Tab::Timer, Tab::Tasks, Tab::Shelf, Tab::Clipboard, Tab::Controls, Tab::Stats, Tab::Apps];
 
 /// The pages in four groups. In the tab bar a group is one unit: closed it is one icon, chosen it opens to show its
 /// pages, and the page you are on shows its name.
@@ -90,7 +95,7 @@ pub(crate) const GROUPS: [(&str, &[Tab]); 4] = [
     ("Media", &[Tab::Media, Tab::Mixer]),
     ("Time", &[Tab::Clock, Tab::Timer, Tab::Tasks]),
     ("Shelf", &[Tab::Shelf, Tab::Clipboard]),
-    ("System", &[Tab::Controls, Tab::Apps]),
+    ("System", &[Tab::Controls, Tab::Stats, Tab::Apps]),
 ];
 
 pub(crate) fn group_of(t: Tab) -> Option<usize> {
@@ -864,6 +869,8 @@ impl Notch {
                     CONTROLS_H
                 } else if self.tab == Tab::Mixer {
                     MIXER_H
+                } else if self.tab == Tab::Stats {
+                    STATS_H
                 } else if self.tab == Tab::Clock && month_rows(Local::now().date_naive()) > 5 {
                     OPEN_H + 14.0
                 } else {

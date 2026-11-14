@@ -9,5 +9,6 @@ mod media;
 mod mixer;
 mod settings;
 mod shelf;
+mod stats;
 mod tasks;
 mod timer;

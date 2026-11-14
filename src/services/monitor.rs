@@ -1,32 +1,119 @@
 //! Polled system state: CPU/RAM/battery, mic+camera usage, clipboard changes.
 
+use std::collections::VecDeque;
 use std::time::{Duration, Instant};
-use sysinfo::System;
+use sysinfo::{Disks, Networks, ProcessRefreshKind, ProcessesToUpdate, System};
 use windows::Win32::System::DataExchange::GetClipboardSequenceNumber;
 use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
 use windows::Win32::UI::Shell::{QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN, SHQueryUserNotificationState};
 use winreg::{RegKey, enums::HKEY_CURRENT_USER};
 
+/// Samples kept for the graphs, one per second.
+pub const HISTORY: usize = 60;
+
 #[derive(Default)]
 pub struct Stats {
     pub cpu: f32,
     pub ram: f32,
+    /// Memory in use and in total, in GiB.
+    pub ram_gb: (f32, f32),
+    pub cpu_hist: VecDeque<f32>,
+    pub ram_hist: VecDeque<f32>,
     pub battery: Option<u8>,
     pub charging: bool,
     pub mic: bool,
     pub cam: bool,
 }
 
+/// What the Stats page shows besides CPU and memory. It is only read while that page is open, since listing every process
+/// and every network adapter costs more than the cheap numbers above.
+#[derive(Default)]
+pub struct Detail {
+    /// Bytes per second over the network and on the disks.
+    pub net_down: f64,
+    pub net_up: f64,
+    pub disk: f64,
+    pub net_hist: VecDeque<f32>,
+    pub disk_hist: VecDeque<f32>,
+    /// The busiest programs, as (name, share of the whole CPU in percent), busiest first.
+    pub top: Vec<(String, f32)>,
+}
+
 pub struct Monitor {
     sys: System,
+    nets: Networks,
+    disks: Disks,
     pub stats: Stats,
+    pub detail: Detail,
     at: Instant,
+    detail_at: Option<Instant>,
     ticks: u32,
+}
+
+/// Appends `v`, dropping the oldest sample past `HISTORY`.
+fn push(hist: &mut VecDeque<f32>, v: f32) {
+    if hist.len() >= HISTORY {
+        hist.pop_front();
+    }
+    hist.push_back(v);
+}
+
+/// "532 B/s", "13 KB/s", "2.4 MB/s".
+pub fn format_rate(bytes_per_s: f64) -> String {
+    if bytes_per_s < 1024.0 {
+        format!("{bytes_per_s:.0} B/s")
+    } else if bytes_per_s < 1024.0 * 1024.0 {
+        format!("{:.0} KB/s", bytes_per_s / 1024.0)
+    } else {
+        format!("{:.1} MB/s", bytes_per_s / (1024.0 * 1024.0))
+    }
 }
 
 impl Monitor {
     pub fn new() -> Self {
-        Self { sys: System::new(), stats: Stats::default(), at: Instant::now() - Duration::from_secs(10), ticks: 0 }
+        Self {
+            sys: System::new(),
+            nets: Networks::new_with_refreshed_list(),
+            disks: Disks::new_with_refreshed_list(),
+            stats: Stats::default(),
+            detail: Detail::default(),
+            at: Instant::now() - Duration::from_secs(10),
+            detail_at: None,
+            ticks: 0,
+        }
+    }
+
+    /// Reads the network, the disks and the busiest programs, at most once a second. Call it while the Stats page is open.
+    pub fn refresh_detail(&mut self) {
+        let dt = self.detail_at.map_or(1.0, |t| t.elapsed().as_secs_f64());
+        if dt < 1.0 {
+            return;
+        }
+        self.detail_at = Some(Instant::now());
+        self.nets.refresh(true);
+        self.disks.refresh(true);
+        let (down, up) = self.nets.iter().fold((0u64, 0u64), |(d, u), (_, n)| (d + n.received(), u + n.transmitted()));
+        let disk = self.disks.iter().map(|d| d.usage()).fold(0u64, |t, u| t + u.read_bytes + u.written_bytes);
+        let d = &mut self.detail;
+        (d.net_down, d.net_up, d.disk) = (down as f64 / dt, up as f64 / dt, disk as f64 / dt);
+        push(&mut d.net_hist, (d.net_down + d.net_up) as f32);
+        push(&mut d.disk_hist, d.disk as f32);
+
+        self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing().with_cpu());
+        let cores = self.sys.cpus().len().max(1) as f32;
+        let mut procs: Vec<(String, f32)> = self
+            .sys
+            .processes()
+            .values()
+            .filter(|p| p.pid().as_u32() != 0)
+            .map(|p| {
+                let n = p.name().to_string_lossy().into_owned();
+                (n.strip_suffix(".exe").map_or(n.clone(), str::to_owned), p.cpu_usage() / cores)
+            })
+            .collect();
+        procs.sort_by(|a, b| b.1.total_cmp(&a.1));
+        procs.truncate(5);
+        self.detail.top = procs;
     }
 
     /// Returns true when the 1 Hz refresh actually ran. The registry walk behind the mic/camera dots is
@@ -41,6 +128,10 @@ impl Monitor {
         let s = &mut self.stats;
         s.cpu = self.sys.global_cpu_usage();
         s.ram = 100.0 * self.sys.used_memory() as f32 / self.sys.total_memory().max(1) as f32;
+        const GIB: f32 = 1024.0 * 1024.0 * 1024.0;
+        s.ram_gb = (self.sys.used_memory() as f32 / GIB, self.sys.total_memory() as f32 / GIB);
+        push(&mut s.cpu_hist, s.cpu);
+        push(&mut s.ram_hist, s.ram);
 
         let mut p = SYSTEM_POWER_STATUS::default();
         // 255 = battery level unknown (desktop PC)
@@ -186,10 +277,29 @@ pub fn keep_on_top() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn foreground_check_does_not_panic() {
         // the answer depends on what is on screen; this only proves the Win32 calls are wired correctly
         let _ = super::foreground_covers_monitor();
         let _ = super::fullscreen_app();
+    }
+
+    #[test]
+    fn rates_read_as_bytes_kilobytes_or_megabytes() {
+        assert_eq!(format_rate(0.0), "0 B/s");
+        assert_eq!(format_rate(532.0), "532 B/s");
+        assert_eq!(format_rate(13.0 * 1024.0), "13 KB/s");
+        assert_eq!(format_rate(2.4 * 1024.0 * 1024.0), "2.4 MB/s");
+    }
+
+    #[test]
+    fn history_keeps_the_last_samples_only() {
+        let mut h = VecDeque::new();
+        for i in 0..HISTORY + 10 {
+            push(&mut h, i as f32);
+        }
+        assert_eq!((h.len(), h.front().copied(), h.back().copied()), (HISTORY, Some(10.0), Some((HISTORY + 9) as f32)));
     }
 }

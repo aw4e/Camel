@@ -17,6 +17,10 @@ pub(crate) const MIXER_H: f32 = TOP + 152.0 + MARGIN;
 /// The Controls page has room to breathe: three rows of 34 px tiles with 8 px gaps, and one standard gap (13) below.
 pub(crate) const CONTROLS_TILE_H: f32 = 34.0;
 pub(crate) const CONTROLS_H: f32 = TOP + 3.0 * CONTROLS_TILE_H + 2.0 * 8.0 + 13.0;
+/// The Stats page: a row of five tiles, then two panels (usage history and the busiest programs), and one standard gap below.
+pub(crate) const STATS_TILE_H: f32 = 46.0;
+pub(crate) const STATS_PANEL_H: f32 = 78.0;
+pub(crate) const STATS_H: f32 = TOP + STATS_TILE_H + GAP + STATS_PANEL_H + GAP_L;
 /// Transparent margin each side of the body, room for the flared top corners.
 pub(crate) const EAR: f32 = 19.0;
 /// The closed notch in minimal mode: a thin line in a taller, transparent window so it is easy to hover.

@@ -58,7 +58,7 @@ task with `schtasks /Delete /TN Camel /F`.
   - **Media**: Now playing, Mixer
   - **Time**: Clock, Timer, Tasks
   - **Shelf**: Shelf, Clipboard
-  - **System**: Controls, Apps
+  - **System**: Controls, Stats, Apps
 - **Scroll** over the tab row to step through all the pages.
 - **Scroll sideways** on the media page to skip tracks. **Middle-click** toggles play and pause.
 - **Alt+Space** opens Spotlight.
@@ -102,6 +102,7 @@ page has three groups, chosen with the chips at the top:
 | **Updates** | Checks GitHub for a newer release and installs it when you ask. |
 | **Tasks** | A page with a field to add a reminder or to-do and the list of what is pending; click the circle to tick one off. Also from Spotlight with `remind` and `todo`. A toast and a beep when one is due. |
 | **Controls** | One panel in the System group: the weather card on the left, and tiles for Wi-Fi, Bluetooth, microphone mute, sound mute, keep awake and the minimal notch. A lit tile is on; click to flip it. |
+| **Stats** | How the PC is doing, in the System group: CPU, memory, disk, network and battery as tiles with a small graph (hover a tile for details), the last minute of CPU and memory, and the programs that use the CPU most. The extra readings (network, disks, processes) are only taken while this page is open. There is no GPU or temperature reading yet. |
 | **Weather** | Temperature next to the clock in the closed notch, and a card on the Controls page with the temperature, conditions, humidity and place. On by default; click the card to switch it off, or use `weather` in Spotlight. |
 | **Alerts** | Notices for Caps Lock, keyboard language, losing or regaining internet and a new audio output. |
 | **Minimal notch** | A tray option that shrinks the closed notch to a thin line, for screens with thick top bezels. |
@@ -299,14 +300,14 @@ src/app/                     the notch window
     mod.rs                   app state, input, animation, window sizing
     draw.rs                  closed pill, toast and the tab bar
     spotlight_view.rs        Spotlight panel
-    pages/                   one file per page: media, mixer, clock, timer, tasks, controls, shelf, clipboard, apps, settings
+    pages/                   one file per page: media, mixer, clock, timer, tasks, controls, stats, shelf, clipboard, apps, settings
     layout.rs                golden-ratio and Fibonacci layout tokens, with tests
     widgets.rs               small drawing and input helpers
     icons.rs                 icons, sliders, switches, notch shape
     prelude.rs               what every page imports
 src/services/                what talks to Windows or the network
     media.rs  lyrics.rs      Windows media session, lrclib lookup and LRC parsing
-    mixer.rs  monitor.rs     WASAPI volume and mute, battery, CPU/RAM, mic/camera, clipboard, memory trim
+    mixer.rs  monitor.rs     WASAPI volume and mute, battery, CPU/RAM, disk, network, top processes, mic/camera, clipboard, memory trim
     system.rs  radios.rs     clock format, keyboard, network, audio output; Wi-Fi and Bluetooth
     weather.rs  update.rs    Open-Meteo weather, release check with a verified download
     rates.rs                 exchange rates from the European Central Bank
