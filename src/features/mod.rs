@@ -9,5 +9,6 @@ pub(crate) mod focus;
 pub(crate) mod notes;
 pub(crate) mod reminders;
 pub(crate) mod settings;
+pub(crate) mod shell_icon;
 pub(crate) mod spotlight;
 pub(crate) mod worldtime;

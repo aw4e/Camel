@@ -8,14 +8,27 @@ const TILES: usize = 5;
 type Tile<'a> = (&'a str, String, Option<(&'a VecDeque<f32>, f32)>, Color32, String);
 const INDIGO: Color32 = Color32::from_rgb(94, 92, 230);
 
-/// The history as a line across `rect`, newest on the right. `max` is the value at the top.
+/// The history as a filled area across `rect`, newest on the right. `max` is the value at the top.
 fn spark(p: &egui::Painter, rect: Rect, hist: &VecDeque<f32>, max: f32, color: Color32, a: f32) {
     if hist.len() < 2 {
         return;
     }
     let step = rect.width() / (crate::monitor::HISTORY - 1) as f32;
     let first = rect.right() - step * (hist.len() - 1) as f32;
-    let points = hist.iter().enumerate().map(|(i, v)| pos2(first + step * i as f32, rect.bottom() - rect.height() * (v / max).clamp(0.0, 1.0))).collect();
+    let points: Vec<_> = hist.iter().enumerate().map(|(i, v)| pos2(first + step * i as f32, rect.bottom() - rect.height() * (v / max).clamp(0.0, 1.0))).collect();
+    // Fill the area under the line: one trapezoid (two triangles) per segment down to the baseline.
+    let fill = fade(color, a * 0.18);
+    let mut mesh = egui::epaint::Mesh::default();
+    for w in points.windows(2) {
+        let (l, r) = (w[0], w[1]);
+        let base = mesh.vertices.len() as u32;
+        for p in [l, r, pos2(r.x, rect.bottom()), pos2(l.x, rect.bottom())] {
+            mesh.colored_vertex(p, fill);
+        }
+        mesh.add_triangle(base, base + 1, base + 2);
+        mesh.add_triangle(base, base + 2, base + 3);
+    }
+    p.add(mesh);
     p.add(egui::Shape::line(points, Stroke::new(1.3, fade(color, a))));
 }
 

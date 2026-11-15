@@ -5,6 +5,18 @@ use crate::prelude::*;
 use crate::{actions, spotlight};
 
 impl Notch {
+    /// The file's real shell icon as a texture, loaded once and cached (failures cached as `None`).
+    fn spot_icon(&mut self, ctx: &egui::Context, path: &std::path::Path) -> Option<egui::TextureId> {
+        if !self.spot_icons.contains_key(path) {
+            let tex = crate::shell_icon::icon_rgba(path).map(|(size, rgba)| {
+                let img = egui::ColorImage::from_rgba_unmultiplied(size, &rgba);
+                ctx.load_texture("spot_icon", img, egui::TextureOptions::LINEAR)
+            });
+            self.spot_icons.insert(path.to_path_buf(), tex);
+        }
+        self.spot_icons.get(path).and_then(|o| o.as_ref()).map(|t| t.id())
+    }
+
     pub(crate) fn draw_spotlight(&mut self, ui: &mut egui::Ui, rect: Rect, a: f32) {
         let ctx = ui.ctx().clone();
         let o = rect.min;
@@ -67,6 +79,17 @@ impl Notch {
             return;
         }
         p.line_segment([o + vec2(0.0, 52.0), o + vec2(SPOT_W, 52.0)], Stroke::new(1.0, fade(fill(22), a)));
+        // Load real shell icons before the row loop (it borrows self immutably); cached so each path extracts once.
+        let icon_paths: Vec<std::path::PathBuf> = self
+            .spot
+            .hits
+            .iter()
+            .filter(|h| matches!(h.kind, spotlight::Kind::App | spotlight::Kind::File) && !h.path.as_os_str().is_empty())
+            .map(|h| h.path.clone())
+            .collect();
+        for path in &icon_paths {
+            self.spot_icon(&ctx, path);
+        }
         let mut clicked = None;
         for (i, h) in self.spot.hits.iter().enumerate() {
             let row = Rect::from_min_size(o + vec2(8.0, 58.0 + i as f32 * 40.0), vec2(SPOT_W - 16.0, 36.0));
@@ -76,15 +99,21 @@ impl Notch {
                 p.rect_filled(row, 9.0, fade(if armed { RED } else { BLUE }, a));
             }
             let ic = Rect::from_center_size(pos2(row.left() + 22.0, row.center().y), Vec2::splat(24.0));
-            let (bg, glyph): (Color32, fn(&egui::Painter, egui::Pos2, Color32)) = match h.kind {
-                spotlight::Kind::Calc => (ORANGE, ui::icon_calc),
-                spotlight::Kind::App => (BLUE, ui::icon_app),
-                spotlight::Kind::File => (Color32::from_gray(99), ui::icon_file),
-                spotlight::Kind::Web => (GREEN, ui::icon_search),
-                spotlight::Kind::Action => h.action.as_ref().map_or((Color32::from_gray(99), ui::icon_close), action_style),
-            };
-            ui::tile(&p, ic, fade(if selected { fill(46) } else { bg }, a));
-            ui::scaled(&p, ic.center(), ui::icon_fit(ic.height()), || glyph(&p, ic.center(), fade(Color32::WHITE, a)));
+            let real = self.spot_icons.get(&h.path).and_then(|o| o.as_ref()).map(|t| t.id());
+            if let Some(tex) = real {
+                // The icon carries its own shape and transparency, so draw it as-is instead of a coloured tile.
+                p.image(tex, ic, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), fade(Color32::WHITE, a));
+            } else {
+                let (bg, glyph): (Color32, fn(&egui::Painter, egui::Pos2, Color32)) = match h.kind {
+                    spotlight::Kind::Calc => (ORANGE, ui::icon_calc),
+                    spotlight::Kind::App => (BLUE, ui::icon_app),
+                    spotlight::Kind::File => (Color32::from_gray(99), ui::icon_file),
+                    spotlight::Kind::Web => (GREEN, ui::icon_search),
+                    spotlight::Kind::Action => h.action.as_ref().map_or((Color32::from_gray(99), ui::icon_close), action_style),
+                };
+                ui::tile(&p, ic, fade(if selected { fill(46) } else { bg }, a));
+                ui::scaled(&p, ic.center(), ui::icon_fit(ic.height()), || glyph(&p, ic.center(), fade(Color32::WHITE, a)));
+            }
             let sub = if selected { fill(190) } else { GRAY };
             let q = p.with_clip_rect(Rect::from_x_y_ranges(row.left() + 42.0..=row.right() - 92.0, row.top()..=row.bottom()));
             let y = if h.detail.is_empty() { row.center().y - 8.0 } else { row.top() + 4.0 };
@@ -107,7 +136,19 @@ impl Notch {
                     }
                 }
             };
-            p.text(pos2(row.right() - 12.0, row.center().y), Align2::RIGHT_CENTER, kind, font(10.0), fade(if selected { fill(190) } else { DIM }, a));
+            // Selected row shows the action as a Raycast-style pill with an ↩ keycap; others keep a plain dim label.
+            if selected {
+                let right = row.right() - 12.0;
+                let key = p.layout_no_wrap("↩".into(), bold(11.0), fade(Color32::WHITE, a));
+                let kw = key.size().x.max(11.0) + 10.0;
+                let cap = Rect::from_min_size(pos2(right - kw, row.center().y - 10.0), vec2(kw, 20.0));
+                p.rect_filled(cap, 5.0, fade(fill(255), a * 0.22));
+                p.galley(cap.center() - key.size() / 2.0, key, fade(Color32::WHITE, a));
+                let label = p.layout_no_wrap(kind.into(), font(10.0), fade(fill(220), a));
+                p.galley(pos2(cap.left() - 8.0 - label.size().x, row.center().y - label.size().y / 2.0), label, fade(fill(220), a));
+            } else {
+                p.text(pos2(row.right() - 12.0, row.center().y), Align2::RIGHT_CENTER, kind, font(10.0), fade(DIM, a));
+            }
 
             if ui.interact(row, ui.scope_id().with(("hit", i)), Sense::click()).clicked() {
                 clicked = Some(i);

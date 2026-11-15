@@ -236,6 +236,8 @@ pub(crate) struct Notch {
     prev_charging: Option<bool>,
     low_warned: bool,
     spot: Spot,
+    /// Real shell-icon textures for Spotlight rows, by file path. `None` = extraction failed (don't retry).
+    spot_icons: std::collections::HashMap<PathBuf, Option<egui::TextureHandle>>,
     index: spotlight::Index,
     hotkey: Option<(GlobalHotKeyManager, HotKey)>,
     tray: Tray,
@@ -348,6 +350,7 @@ impl Notch {
             prev_charging: None,
             low_warned: false,
             spot: Spot::default(),
+            spot_icons: std::collections::HashMap::new(),
             index: spotlight::build_index(),
             hotkey,
             tray,
