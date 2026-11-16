@@ -15,7 +15,8 @@ fn spark(p: &egui::Painter, rect: Rect, hist: &VecDeque<f32>, max: f32, color: C
     }
     let step = rect.width() / (crate::monitor::HISTORY - 1) as f32;
     let first = rect.right() - step * (hist.len() - 1) as f32;
-    let points: Vec<_> = hist.iter().enumerate().map(|(i, v)| pos2(first + step * i as f32, rect.bottom() - rect.height() * (v / max).clamp(0.0, 1.0))).collect();
+    let points: Vec<_> =
+        hist.iter().enumerate().map(|(i, v)| pos2(first + step * i as f32, rect.bottom() - rect.height() * (v / max).clamp(0.0, 1.0))).collect();
     // Fill the area under the line: one trapezoid (two triangles) per segment down to the baseline.
     let fill = fade(color, a * 0.18);
     let mut mesh = egui::epaint::Mesh::default();

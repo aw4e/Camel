@@ -16,13 +16,8 @@ pub fn icon_rgba(path: &Path) -> Option<([usize; 2], Vec<u8>)> {
     unsafe {
         let wide = HSTRING::from(path.as_os_str());
         let mut info = SHFILEINFOW::default();
-        let r = SHGetFileInfoW(
-            PCWSTR(wide.as_ptr()),
-            FILE_FLAGS_AND_ATTRIBUTES(0),
-            Some(&mut info),
-            size_of::<SHFILEINFOW>() as u32,
-            SHGFI_ICON | SHGFI_LARGEICON,
-        );
+        let r =
+            SHGetFileInfoW(PCWSTR(wide.as_ptr()), FILE_FLAGS_AND_ATTRIBUTES(0), Some(&mut info), size_of::<SHFILEINFOW>() as u32, SHGFI_ICON | SHGFI_LARGEICON);
         if r == 0 || info.hIcon.is_invalid() {
             return None;
         }
@@ -70,7 +65,7 @@ unsafe fn read_32bpp(dc: windows::Win32::Graphics::Gdi::HDC, hbm: windows::Win32
                 biHeight: -(h as i32), // negative = top-down, so row 0 is the top
                 biPlanes: 1,
                 biBitCount: 32,
-                biCompression: BI_RGB.0 as u32,
+                biCompression: BI_RGB.0,
                 ..Default::default()
             },
             ..Default::default()
