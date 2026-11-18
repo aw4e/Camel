@@ -47,10 +47,15 @@ impl Notch {
                 self.lyrics_view = !self.lyrics_view;
             }
         }
-        if has_lyrics && self.lyrics_view {
-            self.draw_lyrics(ui, o, (x0, x1 - 26.0), m, a);
+        // player and lyrics crossfade instead of swapping in one frame
+        let view = ui.ctx().animate_bool_with_time(ui.scope_id().with("lyrics-view"), has_lyrics && self.lyrics_view, 0.2);
+        if view > 0.0 {
+            self.draw_lyrics(ui, o, (x0, x1 - 26.0), m, a * view);
+        }
+        if view >= 1.0 {
             return;
         }
+        let a = a * (1.0 - view);
         let (title, artist) = if m.title.is_empty() { ("Not playing", "") } else { (m.title.as_str(), m.artist.as_str()) };
         let text_w = x1 - x0 - if has_lyrics { 26.0 } else { 0.0 };
         ui::marquee(&p, pos2(x0, o.y + TOP), text_w, title, bold(14.0), fade(Color32::WHITE, a), time);
@@ -113,6 +118,12 @@ impl Notch {
             if (current - self.lyric_pos).abs() > 6.0 { current } else { self.lyric_pos + (current - self.lyric_pos) * (1.0 - (-dt * 10.0).exp()) };
         if (current - self.lyric_pos).abs() > 0.01 {
             ui.ctx().request_repaint();
+        } else if let Some((t, _)) = lines.get((current + 1.0) as usize) {
+            // wake exactly when the next line starts, not on the next 33 ms tick
+            let wait = *t - 0.25 - pos;
+            if wait.is_finite() && wait > 0.0 {
+                ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(wait));
+            }
         }
 
         let first = (self.lyric_pos - 3.0).floor().max(0.0) as usize;
