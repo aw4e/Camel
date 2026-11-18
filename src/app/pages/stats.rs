@@ -55,7 +55,7 @@ impl Notch {
         };
         // (label, value, history and its top, colour, hover text)
         let tiles: [Tile; TILES] = [
-            ("CPU", format!("{:.0}%", s.cpu), Some((&s.cpu_hist, 100.0)), BLUE, format!("{:.0}% of the processor in use", s.cpu)),
+            ("CPU", format!("{:.0}%", s.cpu), Some((&s.cpu_hist, 100.0)), accent_color(), format!("{:.0}% of the processor in use", s.cpu)),
             ("Memory", format!("{:.0}%", s.ram), Some((&s.ram_hist, 100.0)), ORANGE, format!("{:.1} of {:.1} GB in use", s.ram_gb.0, s.ram_gb.1)),
             ("Disk", format_rate(d.disk), Some((&d.disk_hist, rate_max(&d.disk_hist))), GREEN, "Read and write, all drives".to_owned()),
             (
@@ -102,7 +102,7 @@ impl Notch {
         }
 
         p.text(history.left_top() + vec2(10.0, 11.0), Align2::LEFT_CENTER, "Usage history", bold(9.5), fade(GRAY, a));
-        for (n, (name, color)) in [("CPU", BLUE), ("Memory", ORANGE)].iter().enumerate() {
+        for (n, (name, color)) in [("CPU", accent_color()), ("Memory", ORANGE)].iter().enumerate() {
             let x = history.right() - 10.0 - (1 - n) as f32 * 52.0;
             p.circle_filled(pos2(x - 40.0, history.top() + 11.0), 2.5, fade(*color, a));
             p.text(pos2(x - 34.0, history.top() + 11.0), Align2::LEFT_CENTER, name, font(9.0), fade(GRAY, a));
@@ -111,7 +111,7 @@ impl Notch {
         p.hline(graph.x_range(), graph.bottom(), Stroke::new(1.0, fade(fill(24), a)));
         p.hline(graph.x_range(), graph.center().y, Stroke::new(1.0, fade(fill(18), a)));
         spark(&p, graph, &s.ram_hist, 100.0, ORANGE, a);
-        spark(&p, graph, &s.cpu_hist, 100.0, BLUE, a);
+        spark(&p, graph, &s.cpu_hist, 100.0, accent_color(), a);
 
         p.text(busiest.left_top() + vec2(10.0, 11.0), Align2::LEFT_CENTER, "Top processes", bold(9.5), fade(GRAY, a));
         for (i, (name, cpu)) in d.top.iter().enumerate() {

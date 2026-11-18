@@ -96,28 +96,50 @@ impl Notch {
     }
 
     /// While a song with synced lyrics plays, its current line is shown under the clock. The notch grows to fit the line;
-    /// a very long line gets smaller, then is cut. `lyric_w` tells the window how wide that is, 0 when there is no line.
+    /// a line wider than the notch wraps onto more rows and the notch grows taller. `lyric_w` and `lyric_h` tell the window
+    /// how big that is, 0 when there is no line.
     fn draw_lyric_row(&self, p: &egui::Painter, rect: Rect, m: &media::State, a: f32) {
         let shift = self.settings.lyric_offset(&m.track_key());
         let Some(line) = m.lyric_line(shift).filter(|_| self.settings.lyrics) else {
             self.lyric_w.set(0.0);
+            self.lyric_h.set(0.0);
             return;
         };
         let line = crate::widgets::clean_text(line);
         let white = fade(Color32::WHITE, a);
         let room = LYRIC_MAX_W - LYRIC_PAD;
-        let (mut size, mut galley) = (12.5, p.layout_no_wrap(line.clone(), bold(12.5), white));
-        while galley.size().x > room && size > 11.0 {
-            size -= 0.5;
-            galley = p.layout_no_wrap(line.clone(), bold(size), white);
+        let galley = crate::widgets::wrap_centered(p, line.clone(), bold(12.5), white, room);
+        // The notch grows at once for a longer line but shrinks only after a few seconds, so alternating long and short
+        // lines do not make it breathe in and out on every change.
+        let need = (galley.size().x + LYRIC_PAD, galley.size().y + 8.0);
+        let (hw, hh, since) = self.lyric_hold.get();
+        let hold = if need.0 > hw || need.1 > hh {
+            (hw.max(need.0), hh.max(need.1), Instant::now())
+        } else if since.elapsed() > Duration::from_secs(5) {
+            (need.0, need.1, Instant::now())
+        } else {
+            (hw, hh, since)
+        };
+        self.lyric_hold.set(hold);
+        self.lyric_w.set(hold.0);
+        self.lyric_h.set(hold.1);
+        // a new line fades in while the one before fades out, so the change is a crossfade instead of a snap
+        let (fresh, before) = {
+            let mut last = self.lyric_last.borrow_mut();
+            if last.0 != line {
+                *last = (line, last.0.clone(), Instant::now());
+            }
+            ((last.2.elapsed().as_secs_f32() / 0.22).clamp(0.0, 1.0), last.1.clone())
+        };
+        let top = rect.top() + PILL_H - 2.0;
+        if fresh < 1.0 {
+            p.ctx().request_repaint();
+            if !before.is_empty() {
+                let old = crate::widgets::wrap_centered(p, before, bold(12.5), white, room);
+                p.galley(pos2(rect.center().x - old.rect.center().x, top), old, fade(Color32::WHITE, (1.0 - fresh) * a));
+            }
         }
-        if galley.size().x > room {
-            let keep = (line.chars().count() as f32 * room / galley.size().x) as usize;
-            galley = p.layout_no_wrap(crate::widgets::shorten(&line, keep.max(2)), bold(size), white);
-        }
-        self.lyric_w.set(galley.size().x + LYRIC_PAD);
-        let y = rect.top() + PILL_H + 4.0;
-        p.galley(pos2(rect.center().x - galley.size().x / 2.0, y - galley.size().y / 2.0), galley, Color32::WHITE);
+        p.galley(pos2(rect.center().x - galley.rect.center().x, top), galley, fade(Color32::WHITE, fresh * a));
     }
 
     /// Version number next to Quit. It turns into an Update button when a newer release was found.
@@ -129,7 +151,7 @@ impl Notch {
             update::Status::Available(r) => {
                 let pill = Rect::from_center_size(pos2(right_center.x - 22.0, right_center.y), vec2(44.0, 18.0));
                 let resp = hit(ui, "update", pill).on_hover_text(format!("Install Camel {} and restart", r.version));
-                p.rect_filled(pill, 9.0, fade(BLUE.gamma_multiply(if resp.hovered() { 1.0 } else { 0.8 }), a));
+                p.rect_filled(pill, 9.0, fade(accent_color().gamma_multiply(if resp.hovered() { 1.0 } else { 0.8 }), a));
                 p.text(pill.center(), Align2::CENTER_CENTER, "Update", bold(11.0), fade(Color32::WHITE, a));
                 if resp.clicked() {
                     self.update_action();
@@ -157,11 +179,11 @@ impl Notch {
         let o = rect.min;
         let icon = Rect::from_center_size(pos2(o.x + 26.0, o.y + TOAST.y / 2.0), Vec2::splat(28.0));
         let (bg, glyph): (Color32, fn(&egui::Painter, egui::Pos2, Color32)) = match t.icon {
-            ToastIcon::Clipboard => (BLUE, ui::icon_clipboard),
+            ToastIcon::Clipboard => (accent_color(), ui::icon_clipboard),
             ToastIcon::Awake => (GREEN, ui::icon_sun),
-            ToastIcon::Volume => (BLUE, ui::icon_speaker),
+            ToastIcon::Volume => (accent_color(), ui::icon_speaker),
             ToastIcon::Timer => (ORANGE, ui::icon_timer),
-            ToastIcon::Apps => (BLUE, ui::icon_app),
+            ToastIcon::Apps => (accent_color(), ui::icon_app),
             ToastIcon::Keyboard => (Color32::from_rgb(94, 92, 230), ui::icon_keyboard),
             ToastIcon::Online => (GREEN, ui::icon_wifi),
             ToastIcon::Offline => (RED, ui::icon_wifi),
@@ -235,17 +257,23 @@ impl Notch {
             let resp = hit(ui, &format!("tab{i}"), r).on_hover_text(tip);
             let chosen = self.tab == *tab;
             if chosen {
-                p.rect_filled(r, TAB_PILL_H / 2.0, fade(fill(40), a));
+                p.rect_filled(r, TAB_PILL_H / 2.0, fade(accent_color().gamma_multiply(0.30), a));
             } else if resp.hovered() {
                 p.rect_filled(r, TAB_PILL_H / 2.0, fade(fill(20), a));
             }
-            let col = if chosen || resp.hovered() { Color32::WHITE } else { GRAY };
+            let col = if chosen {
+                accent_color()
+            } else if resp.hovered() {
+                Color32::WHITE
+            } else {
+                GRAY
+            };
             let icon_at = pos2(r.left() + TAB_W / 2.0, r.center().y);
             ui::scaled(&p, icon_at, ui::icon_fit(TAB_PILL_H), || tab_icon(*tab)(&p, icon_at, fade(col, a)));
             let open = ((widths[i] - TAB_W) / (tab_open_w(names[i].size().x) - TAB_W)).clamp(0.0, 1.0);
             if open > 0.05 {
                 let text_at = pos2(r.left() + TAB_W - GAP_S + 2.0, r.center().y - names[i].size().y / 2.0);
-                p.with_clip_rect(r).galley(text_at, names[i].clone(), fade(Color32::WHITE, a * open * open));
+                p.with_clip_rect(r).galley(text_at, names[i].clone(), fade(accent_color(), a * open * open));
             }
             if resp.clicked() {
                 // a closed group returns to the page you last had open in it
@@ -257,10 +285,23 @@ impl Notch {
         let g = hit(ui, "gear", gear);
         let on = self.tab == Tab::Settings;
         if on || g.hovered() {
-            p.rect_filled(gear, 12.0, fade(fill(if on { 46 } else { 24 }), a));
+            p.rect_filled(gear, 12.0, if on { fade(accent_color().gamma_multiply(0.30), a) } else { fade(fill(24), a) });
         }
         ui::scaled(&p, gear.center(), ui::icon_fit(gear.height()), || {
-            ui::icon_gear(&p, gear.center(), fade(if on || g.hovered() { Color32::WHITE } else { GRAY }, a))
+            ui::icon_gear(
+                &p,
+                gear.center(),
+                fade(
+                    if on {
+                        accent_color()
+                    } else if g.hovered() {
+                        Color32::WHITE
+                    } else {
+                        GRAY
+                    },
+                    a,
+                ),
+            )
         });
         if g.clicked() {
             self.tab = if on { Tab::Media } else { Tab::Settings };

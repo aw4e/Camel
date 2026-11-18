@@ -66,7 +66,7 @@ pub(crate) fn make_tray(minimal: bool) -> Tray {
 /// SF Pro is not redistributable, so it is read from a `fonts/` folder (next to the exe, two levels up for
 /// `cargo run`, or the source tree) and only used if found. Open Sans (OFL) is embedded as the fallback,
 /// egui's default fonts stay behind both as glyph fallback.
-pub(crate) fn setup_fonts(ctx: &egui::Context) {
+pub(crate) fn setup_fonts(ctx: &egui::Context, cjk: bool) {
     use egui::{FontData, FontFamily};
     let exe = std::env::current_exe().ok().and_then(|p| p.parent().map(PathBuf::from)).unwrap_or_default();
     let dirs = [exe.join("fonts"), exe.join("../../fonts"), PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts")];
@@ -84,7 +84,9 @@ pub(crate) fn setup_fonts(ctx: &egui::Context) {
     bold.insert(0, "ui-bold".into());
     // Windows ships emoji and symbol fonts; as the last fallback they replace the empty boxes a title with an emoji would show
     let windows = std::env::var_os("SystemRoot").map_or_else(|| PathBuf::from(r"C:\Windows"), PathBuf::from).join("Fonts");
-    for (name, file) in [("system-emoji", "seguiemj.ttf"), ("system-symbols", "seguisym.ttf")] {
+    // Japanese, Korean and Chinese come from the fonts Windows ships (~40 MB), so only when a lyric line needs them
+    let cjk_fonts: &[(&str, &str)] = if cjk { &[("system-ja", "YuGothR.ttc"), ("system-ko", "malgun.ttf"), ("system-zh", "msyh.ttc")] } else { &[] };
+    for (name, file) in cjk_fonts.iter().copied().chain([("system-emoji", "seguiemj.ttf"), ("system-symbols", "seguisym.ttf")]) {
         if let Ok(bytes) = std::fs::read(windows.join(file)) {
             fonts.font_data.insert(name.into(), Arc::new(FontData::from_owned(bytes)));
             for family in [fonts.families.entry(FontFamily::Proportional).or_default(), &mut bold] {

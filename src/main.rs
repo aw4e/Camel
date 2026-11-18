@@ -55,7 +55,7 @@ fn main() -> eframe::Result {
         "Camel",
         eframe::NativeOptions { viewport, ..Default::default() },
         Box::new(|cc| {
-            platform::setup_fonts(&cc.egui_ctx);
+            platform::setup_fonts(&cc.egui_ctx, false);
             platform::strip_window_frame();
             cc.egui_ctx.set_visuals(egui::Visuals::dark());
             Ok(Box::new(Notch::new(&cc.egui_ctx)))

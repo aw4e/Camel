@@ -22,6 +22,8 @@ pub struct Settings {
     pub key_toasts: bool,
     pub device_toasts: bool,
     pub minimal: bool,
+    /// Index of the accent colour in `ACCENTS`.
+    pub accent: usize,
     /// Show the temperature and humidity of where you are on the Clock page. It contacts a weather service with your
     /// rounded location, so it can be switched off.
     pub weather: bool,
@@ -57,6 +59,7 @@ impl Default for Settings {
             key_toasts: true,
             device_toasts: true,
             minimal: false,
+            accent: 0,
             weather: true,
             city: String::new(),
             channel_overrides: Default::default(),

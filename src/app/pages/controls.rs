@@ -25,11 +25,11 @@ impl Notch {
 
         // (label, on or None when this PC cannot do it, lit colour, icon)
         let tiles: [(&str, Option<bool>, Color32, Icon); 6] = [
-            ("Wi-Fi", radio.wifi, BLUE, ui::icon_wifi),
-            ("Bluetooth", radio.bluetooth, BLUE, ui::icon_bluetooth),
-            ("Microphone", self.mic_muted.map(|m| !m), BLUE, ui::icon_mic),
-            ("Sound", self.speakers_muted.map(|m| !m), BLUE, ui::icon_speaker),
-            ("Keep awake", Some(self.awake), GREEN, ui::icon_sun),
+            ("Wi-Fi", radio.wifi, accent_color(), ui::icon_wifi),
+            ("Bluetooth", radio.bluetooth, accent_color(), ui::icon_bluetooth),
+            ("Microphone", self.mic_muted.map(|m| !m), accent_color(), ui::icon_mic),
+            ("Sound", self.speakers_muted.map(|m| !m), accent_color(), ui::icon_speaker),
+            ("Keep awake", Some(self.awake), accent_color(), ui::icon_sun),
             ("Minimal notch", Some(self.settings.minimal), Color32::from_rgb(94, 92, 230), ui::icon_pill),
         ];
         let left = o.x + MARGIN + CARD_W + GAP_L;
@@ -61,8 +61,24 @@ impl Notch {
             );
             let room = tile.right() - GAP - (badge.x + 12.0 + GAP);
             let color = fade(if available { Color32::WHITE } else { DIM }, a);
+            // a connected Bluetooth device with a battery: its name under the label and the level on the right
+            let device = (i == 1 && lit).then(|| radio.batteries.first()).flatten();
             let galley = crate::widgets::fit_bold(&p, label, 11.5, room, color);
-            p.galley(pos2(badge.x + 12.0 + GAP, tile.center().y - galley.size().y / 2.0), galley, color);
+            let ty = if device.is_some() { tile.center().y - galley.size().y / 2.0 - 5.0 } else { tile.center().y - galley.size().y / 2.0 };
+            p.galley(pos2(badge.x + 12.0 + GAP, ty), galley, color);
+            if let Some((name, pct)) = device {
+                let level = format!("{pct}%");
+                let lw = p.layout_no_wrap(level.clone(), bold(10.0), fade(GRAY, a)).size().x;
+                p.text(pos2(tile.right() - GAP, tile.center().y + 6.0), Align2::RIGHT_CENTER, level, bold(10.0), fade(if *pct <= 20 { RED } else { GRAY }, a));
+                // the name never runs into the level: it is cut with an ellipsis to the room left of it
+                let space = room - lw - 6.0;
+                let mut shown = name.clone();
+                let mut sub = p.layout_no_wrap(shown.clone(), font(9.0), fade(GRAY, a));
+                while sub.size().x > space && shown.pop().is_some() {
+                    sub = p.layout_no_wrap(format!("{}…", shown.trim_end()), font(9.0), fade(GRAY, a));
+                }
+                p.galley(pos2(badge.x + 12.0 + GAP, tile.center().y + 6.0 - sub.size().y / 2.0), sub, fade(GRAY, a));
+            }
             if resp.clicked() && available {
                 clicked = Some(i);
             }

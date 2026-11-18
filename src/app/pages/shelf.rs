@@ -8,7 +8,7 @@ impl Notch {
         let area = Rect::from_min_size(o + vec2(MARGIN, TOP), vec2(OPEN_W - 2.0 * MARGIN, 90.0));
         let dragging = ui.input(|i| !i.raw.hovered_files.is_empty());
         if self.shelf.is_empty() || dragging {
-            let col = if dragging { BLUE } else { DIM };
+            let col = if dragging { accent_color() } else { DIM };
             ui::dashed_rrect(&p, area, 12.0, Stroke::new(1.5, fade(col, a)));
             ui::icon_tray(&p, area.center() - vec2(0.0, 10.0), fade(col, a));
             p.text(area.center() + vec2(0.0, 12.0), Align2::CENTER_CENTER, "Drop files here", bold(12.0), fade(col, a));

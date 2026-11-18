@@ -73,7 +73,7 @@ impl Notch {
             }
             // a pinned row carries a blue dot; hovering shows the Pin / Unpin button
             if pinned {
-                p.circle_filled(pos2(row.left() + 4.0, row.center().y), 1.5, fade(BLUE, a));
+                p.circle_filled(pos2(row.left() + 4.0, row.center().y), 1.5, fade(accent_color(), a));
             }
             if hover {
                 let b = Rect::from_center_size(pos2(row.right() - ROW_PAD - 16.0, row.center().y), vec2(40.0, ROW_H));
