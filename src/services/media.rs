@@ -293,6 +293,29 @@ fn lyrics_for(lyr: &Arc<LyricsCtx>, artist: &str, title: &str, dur: f64) -> Opti
 mod tests {
     use super::*;
 
+    /// Plays nothing itself: while a song plays, logs how far each raw reading is from where the previous one said the
+    /// track would be. A steady player gives ~0; a player that reports in steps gives jumps.
+    /// Run: `cargo test --bin camel position_jitter -- --ignored --nocapture`
+    #[test]
+    #[ignore = "needs a song playing"]
+    fn position_jitter() {
+        unsafe { RoInitialize(RO_INIT_MULTITHREADED).ok() };
+        let mgr = Manager::RequestAsync().unwrap().join().unwrap();
+        let session = mgr.GetCurrentSession().expect("nothing is playing");
+        let (mut last, mut worst) = (None::<(f64, Instant)>, 0.0f64);
+        for _ in 0..40 {
+            let (pos, _) = timeline(&session, true).unwrap();
+            if let Some((p, at)) = last {
+                let jump = pos - (p + at.elapsed().as_secs_f64());
+                worst = worst.max(jump.abs());
+                println!("pos {pos:7.2}  expected {:7.2}  jump {jump:+.3}", p + at.elapsed().as_secs_f64());
+            }
+            last = Some((pos, Instant::now()));
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        println!("worst jump {worst:.3}s");
+    }
+
     #[test]
     fn app_names_are_readable() {
         assert_eq!(app_name("Spotify.exe"), "Spotify");

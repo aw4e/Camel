@@ -178,6 +178,9 @@ struct Spot {
     rates_version: u32,
 }
 
+/// A shell icon from the worker: the file it is for, and its size and RGBA pixels (None when Windows has no icon).
+type IconReply = (PathBuf, Option<([usize; 2], Vec<u8>)>);
+
 pub(crate) struct Notch {
     media: media::Handle,
     monitor: monitor::Monitor,
@@ -236,8 +239,14 @@ pub(crate) struct Notch {
     prev_charging: Option<bool>,
     low_warned: bool,
     spot: Spot,
+    /// The CJK fonts are loaded; they are only wanted once a Japanese, Korean or Chinese track shows up.
+    cjk_fonts: bool,
     /// Real shell-icon textures for Spotlight rows, by file path. `None` = extraction failed (don't retry).
     spot_icons: std::collections::HashMap<PathBuf, Option<egui::TextureHandle>>,
+    /// Paths already sent to the icon worker, and the channel its answers come back on.
+    spot_icons_asked: std::collections::HashSet<PathBuf>,
+    spot_icon_tx: std::sync::mpsc::Sender<IconReply>,
+    spot_icon_rx: std::sync::mpsc::Receiver<IconReply>,
     index: spotlight::Index,
     hotkey: Option<(GlobalHotKeyManager, HotKey)>,
     tray: Tray,
@@ -265,6 +274,11 @@ pub(crate) struct Notch {
     lyric_pos: f32,
     /// Width the closed notch wants for the lyric line it shows, 0 when it shows none. Set while drawing.
     lyric_w: std::cell::Cell<f32>,
+    /// Height the closed notch wants below the pill for that line, which grows when the line wraps.
+    lyric_h: std::cell::Cell<f32>,
+    /// The size the closed notch keeps for lyrics (width, height, when it last had to grow), and the line last shown with when it appeared.
+    lyric_hold: std::cell::Cell<(f32, f32, Instant)>,
+    lyric_last: std::cell::RefCell<(String, String, Instant)>,
     /// Seconds the lyrics are ahead of the player for the current track, and which track that is.
     lyric_offset: f64,
     lyric_track: String,
@@ -297,10 +311,12 @@ pub(crate) struct Notch {
 impl Notch {
     pub(crate) fn new(ctx: &egui::Context) -> Self {
         let settings = Settings::load();
+        ui::set_accent(settings.accent);
         let weather = weather::Service::spawn(settings.weather, settings.city.clone());
         let record = apps::load_record();
         let tray = platform::make_tray(settings.minimal);
         let hotkey = platform::register_hotkey(ctx, settings.spotlight);
+        let (icon_tx, icon_rx) = std::sync::mpsc::channel();
         Self {
             media: media::spawn(settings.lyrics),
             monitor: monitor::Monitor::new(),
@@ -350,7 +366,11 @@ impl Notch {
             prev_charging: None,
             low_warned: false,
             spot: Spot::default(),
+            cjk_fonts: false,
             spot_icons: std::collections::HashMap::new(),
+            spot_icons_asked: std::collections::HashSet::new(),
+            spot_icon_tx: icon_tx,
+            spot_icon_rx: icon_rx,
             index: spotlight::build_index(),
             hotkey,
             tray,
@@ -373,6 +393,9 @@ impl Notch {
             lyrics_view: false,
             lyric_pos: 0.0,
             lyric_w: std::cell::Cell::new(0.0),
+            lyric_h: std::cell::Cell::new(0.0),
+            lyric_hold: std::cell::Cell::new((0.0, 0.0, Instant::now())),
+            lyric_last: std::cell::RefCell::new((String::new(), String::new(), Instant::now())),
             lyric_offset: 0.0,
             lyric_track: String::new(),
             updater: update::Updater::new(),
@@ -567,6 +590,7 @@ impl Notch {
     }
 
     fn apply_settings(&mut self, ctx: &egui::Context, before: &Settings) {
+        ui::set_accent(self.settings.accent);
         if self.settings.autostart != before.autostart && !settings::set_autostart(self.settings.autostart) {
             self.settings.autostart = before.autostart;
             self.show_toast(ToastIcon::Apps, "Could not change autostart", "Run Camel as administrator".to_owned());
@@ -874,6 +898,8 @@ impl Notch {
                     MIXER_H
                 } else if self.tab == Tab::Stats {
                     STATS_H
+                } else if self.tab == Tab::Settings && self.settings_page == 0 {
+                    SETTINGS_GENERAL_H
                 } else if self.tab == Tab::Clock && month_rows(Local::now().date_naive()) > 5 {
                     OPEN_H + 14.0
                 } else {
@@ -885,7 +911,7 @@ impl Notch {
             Mode::Compact => {
                 let base = PILL_W + if self.dots_active() { 30.0 } else { 0.0 };
                 let lyric = self.lyric_w.get();
-                if lyric > 0.0 { vec2(lyric.max(base), PILL_H + LYRIC_EXTRA_H) } else { vec2(base, PILL_H) }
+                if lyric > 0.0 { vec2(lyric.max(base), PILL_H + self.lyric_h.get().max(LYRIC_EXTRA_H)) } else { vec2(base, PILL_H) }
             }
         };
         self.w.step(target.x, dt);
@@ -1039,6 +1065,15 @@ impl eframe::App for Notch {
         self.last_frame = now;
         let m = self.media.state();
         self.sync_art(&ctx, &m.art);
+        // Japanese, Korean or Chinese in the track or its lyrics: load the Windows fonts for them, once
+        if !self.cjk_fonts
+            && (widgets::needs_cjk(&m.title)
+                || widgets::needs_cjk(&m.artist)
+                || m.lyrics.as_deref().is_some_and(|l| l.iter().any(|(_, t)| widgets::needs_cjk(t))))
+        {
+            self.cjk_fonts = true;
+            platform::setup_fonts(&ctx, true);
+        }
         self.note_player(&m.source);
         if self.toast.as_ref().is_some_and(|t| t.until < now) {
             self.toast = None;

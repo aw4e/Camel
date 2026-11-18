@@ -158,7 +158,7 @@ impl Notch {
             // the strips are the channels; the master strip takes no apps
             let target = pointer.and_then(|pt| cards.iter().take(channels::NAMES.len()).position(|c| c.contains(pt)));
             if let Some(t) = target {
-                p.rect_stroke(cards[t], 12.0, Stroke::new(1.5, fade(BLUE, a)), StrokeKind::Inside);
+                p.rect_stroke(cards[t], 12.0, Stroke::new(1.5, fade(accent_color(), a)), StrokeKind::Inside);
             }
             if let Some(pt) = pointer {
                 let galley = p.layout_no_wrap(shorten(&name, 16), bold(10.5), fade(Color32::WHITE, a));

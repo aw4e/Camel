@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 /// The Settings page: three groups, one shown at a time, each a short list of switches in two columns.
 const PAGES: [&str; 3] = ["General", "Media and data", "Alerts"];
-const ROW: f32 = 21.0;
+const ROW: f32 = SETTINGS_ROW;
 
 impl Notch {
     pub(crate) fn tab_settings(&mut self, ui: &mut egui::Ui, o: egui::Pos2, a: f32) {
@@ -77,6 +77,27 @@ impl Notch {
                 p.text(pos2(left + ROW_PAD, y), Align2::LEFT_CENTER, label, font(12.0), fade(Color32::WHITE, a));
                 if ui::toggle(ui, ui.scope_id().with(("set", col, row)), pos2(left + gw - ROW_PAD - 14.0, y), *value, a) {
                     *value = !*value;
+                }
+            }
+        }
+        if self.settings_page == 0 {
+            // under both columns: the accent colour, as a row of swatches
+            let row = Rect::from_min_size(pos2(o.x + MARGIN, o.y + APPS_TOP + 3.0 * ROW + GAP_S), vec2(OPEN_W - 2.0 * MARGIN, ROW));
+            p.rect_filled(row, 9.0, fade(fill(15), a));
+            p.text(pos2(row.left() + ROW_PAD, row.center().y), Align2::LEFT_CENTER, "Accent colour", font(12.0), fade(Color32::WHITE, a));
+            let (r, step) = (6.0, 22.0);
+            let first = row.right() - ROW_PAD - r - step * (ui::ACCENTS.len() - 1) as f32;
+            for (i, (name, color)) in ui::ACCENTS.iter().enumerate() {
+                let c = pos2(first + step * i as f32, row.center().y);
+                let resp = hit(ui, &format!("accent{i}"), Rect::from_center_size(c, Vec2::splat(2.0 * r + 6.0))).on_hover_text(*name);
+                p.circle_filled(c, r, fade(*color, a));
+                if self.settings.accent == i {
+                    p.circle_stroke(c, r + 3.0, Stroke::new(1.5, fade(Color32::WHITE, a)));
+                } else if resp.hovered() {
+                    p.circle_stroke(c, r + 2.0, Stroke::new(1.0, fade(fill(120), a)));
+                }
+                if resp.clicked() {
+                    self.settings.accent = i;
                 }
             }
         }

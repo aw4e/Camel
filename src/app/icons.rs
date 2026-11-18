@@ -5,7 +5,27 @@ use eframe::egui::{self, Color32, FontFamily, FontId, Mesh, Painter, Pos2, Rect,
 // macOS dark system palette. GRAY / DIM are secondary / tertiary label.
 pub const GRAY: Color32 = Color32::from_gray(152);
 pub const DIM: Color32 = Color32::from_gray(99);
-pub const BLUE: Color32 = Color32::from_rgb(10, 132, 255);
+/// The accent colours the user can pick in Settings, as (name, colour); the first is the macOS blue Camel started with.
+pub const ACCENTS: [(&str, Color32); 8] = [
+    ("Blue", Color32::from_rgb(10, 132, 255)),
+    ("Purple", Color32::from_rgb(191, 90, 242)),
+    ("Pink", Color32::from_rgb(255, 55, 95)),
+    ("Red", Color32::from_rgb(255, 69, 58)),
+    ("Orange", Color32::from_rgb(255, 159, 10)),
+    ("Yellow", Color32::from_rgb(255, 214, 10)),
+    ("Green", Color32::from_rgb(48, 209, 88)),
+    ("Graphite", Color32::from_rgb(142, 142, 147)),
+];
+static ACCENT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// The accent colour in use: lit tiles, the selected Spotlight row, the CPU graph.
+pub fn accent_color() -> Color32 {
+    ACCENTS[ACCENT.load(std::sync::atomic::Ordering::Relaxed).min(ACCENTS.len() - 1)].1
+}
+
+pub fn set_accent(i: usize) {
+    ACCENT.store(i.min(ACCENTS.len() - 1), std::sync::atomic::Ordering::Relaxed);
+}
 pub const GREEN: Color32 = Color32::from_rgb(48, 209, 88);
 pub const ORANGE: Color32 = Color32::from_rgb(255, 159, 10);
 pub const RED: Color32 = Color32::from_rgb(255, 69, 58);
@@ -417,7 +437,7 @@ pub fn toggle(ui: &mut Ui, id: egui::Id, c: Pos2, on: bool, f: f32) -> bool {
     let rect = Rect::from_center_size(c, vec2(28.0, 16.0));
     let resp = ui.interact(rect.expand(3.0), id, Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     let k = ui.ctx().animate_bool_with_time(id.with("k"), on, 0.18);
-    let bg = Color32::from_gray(62).lerp_to_gamma(GREEN, k);
+    let bg = Color32::from_gray(62).lerp_to_gamma(accent_color(), k);
     let knob = pos2(rect.left() + 8.0 + 12.0 * k, rect.center().y);
     let p = ui.painter();
     p.rect_filled(rect, 8.0, fade(bg, f));

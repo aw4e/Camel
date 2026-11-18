@@ -23,10 +23,12 @@ impl Kind {
 }
 
 /// Last known state: None when the PC has no such radio or Windows refused access to it.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Snapshot {
     pub wifi: Option<bool>,
     pub bluetooth: Option<bool>,
+    /// Connected Bluetooth devices that report a battery: (name, percent).
+    pub batteries: Vec<(String, u8)>,
 }
 
 pub struct Radios {
@@ -69,7 +71,7 @@ impl Radios {
     }
 
     pub fn state(&self) -> Snapshot {
-        *self.shared.lock().unwrap_or_else(PoisonError::into_inner)
+        self.shared.lock().unwrap_or_else(PoisonError::into_inner).clone()
     }
 
     pub fn set(&self, kind: Kind, on: bool) {
@@ -90,7 +92,69 @@ fn find(kind: Kind) -> Option<Radio> {
 fn read() -> Snapshot {
     let on =
         |kind| find(kind).and_then(|r| r.State().ok()).and_then(|s| (s != RadioState::Unknown && s != RadioState::Disabled).then_some(s == RadioState::On));
-    Snapshot { wifi: on(Kind::WiFi), bluetooth: on(Kind::Bluetooth) }
+    Snapshot { wifi: on(Kind::WiFi), bluetooth: on(Kind::Bluetooth), batteries: bluetooth_batteries() }
+}
+
+/// Windows keeps one battery level per Bluetooth device (`DEVPKEY` {104EA319-…} 2, written by the hands-free profile) on a
+/// child node of the device, so nodes are grouped by the device address in their instance id. It reports no left/right
+/// split or charging case: that is vendor data Windows does not expose.
+fn bluetooth_batteries() -> Vec<(String, u8)> {
+    use windows::Win32::Devices::DeviceAndDriverInstallation::{
+        CM_GETIDLIST_FILTER_ENUMERATOR, CM_Get_DevNode_PropertyW, CM_Get_Device_ID_List_SizeW, CM_Get_Device_ID_ListW, CM_LOCATE_DEVNODE_NORMAL,
+        CM_Locate_DevNodeW,
+    };
+    use windows::Win32::Devices::Properties::{DEVPKEY_Device_FriendlyName, DEVPROPTYPE};
+    use windows::Win32::Foundation::DEVPROPKEY;
+    use windows::core::{GUID, PCWSTR, w};
+
+    const BATTERY: DEVPROPKEY = DEVPROPKEY { fmtid: GUID::from_u128(0x104EA319_6EE2_4701_BD47_8DDBF425BBE5), pid: 2 };
+    const CONNECTED: DEVPROPKEY = DEVPROPKEY { fmtid: GUID::from_u128(0x83DA6326_97A6_4088_9453_A1923F573B29), pid: 15 };
+    unsafe {
+        let mut len = 0u32;
+        if CM_Get_Device_ID_List_SizeW(&mut len, w!("BTHENUM"), CM_GETIDLIST_FILTER_ENUMERATOR).0 != 0 {
+            return Vec::new();
+        }
+        let mut buf = vec![0u16; len as usize];
+        if CM_Get_Device_ID_ListW(w!("BTHENUM"), &mut buf, CM_GETIDLIST_FILTER_ENUMERATOR).0 != 0 {
+            return Vec::new();
+        }
+        let prop = |inst: &[u16], key: &DEVPROPKEY, out: &mut [u8]| -> Option<(DEVPROPTYPE, usize)> {
+            let mut dev = 0u32;
+            if CM_Locate_DevNodeW(&mut dev, PCWSTR(inst.as_ptr()), CM_LOCATE_DEVNODE_NORMAL).0 != 0 {
+                return None;
+            }
+            let (mut ty, mut size) = (DEVPROPTYPE::default(), out.len() as u32);
+            (CM_Get_DevNode_PropertyW(dev, key, &mut ty, Some(out.as_mut_ptr()), &mut size, 0).0 == 0).then_some((ty, size as usize))
+        };
+        // (address, name, connected, battery) per node; the main node has the name, a profile node has the battery
+        let (mut names, mut levels) = (Vec::<(String, String, bool)>::new(), Vec::<(String, u8)>::new());
+        for id in buf.split(|c| *c == 0).filter(|s| !s.is_empty()) {
+            let text = String::from_utf16_lossy(id);
+            let mut z = id.to_vec();
+            z.push(0);
+            let mut b = [0u8; 1];
+            if prop(&z, &BATTERY, &mut b).is_some() {
+                // profile nodes end in "<12 hex address>_C00000000"
+                if let Some(addr) = text.rsplit_once('_').and_then(|(head, _)| head.get(head.len().saturating_sub(12)..)) {
+                    levels.push((addr.to_uppercase(), b[0].min(100)));
+                }
+            }
+            if let Some(addr) = text.to_uppercase().split("\\DEV_").nth(1).and_then(|r| r.get(..12)).map(str::to_owned) {
+                let mut raw = [0u8; 512];
+                let name = prop(&z, &DEVPKEY_Device_FriendlyName, &mut raw)
+                    .map(|(_, n)| {
+                        String::from_utf16_lossy(&raw[..n].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect::<Vec<_>>())
+                            .trim_end_matches('\0')
+                            .to_owned()
+                    })
+                    .unwrap_or_default();
+                let mut on = [0u8; 1];
+                let connected = prop(&z, &CONNECTED, &mut on).is_some() && on[0] != 0;
+                names.push((addr, name, connected));
+            }
+        }
+        names.into_iter().filter(|(_, n, c)| *c && !n.is_empty()).filter_map(|(a, n, _)| levels.iter().find(|(l, _)| *l == a).map(|(_, p)| (n, *p))).collect()
+    }
 }
 
 fn set(kind: Kind, on: bool) -> Option<()> {

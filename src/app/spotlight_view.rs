@@ -5,16 +5,23 @@ use crate::prelude::*;
 use crate::{actions, spotlight};
 
 impl Notch {
-    /// The file's real shell icon as a texture, loaded once and cached (failures cached as `None`).
-    fn spot_icon(&mut self, ctx: &egui::Context, path: &std::path::Path) -> Option<egui::TextureId> {
-        if !self.spot_icons.contains_key(path) {
-            let tex = crate::shell_icon::icon_rgba(path).map(|(size, rgba)| {
-                let img = egui::ColorImage::from_rgba_unmultiplied(size, &rgba);
-                ctx.load_texture("spot_icon", img, egui::TextureOptions::LINEAR)
+    /// Asks a worker thread for the file's real shell icon; the UI thread never waits on the shell, which takes tens to
+    /// hundreds of milliseconds the first time for a `.url` or `.lnk`. Finished icons are turned into textures here,
+    /// failures are cached as `None` so they are not asked for again.
+    fn spot_icon(&mut self, ctx: &egui::Context, path: &std::path::Path) {
+        while let Ok((p, rgba)) = self.spot_icon_rx.try_recv() {
+            let tex = rgba.map(|(size, px): ([usize; 2], Vec<u8>)| {
+                ctx.load_texture("spot_icon", egui::ColorImage::from_rgba_unmultiplied(size, &px), egui::TextureOptions::LINEAR)
             });
-            self.spot_icons.insert(path.to_path_buf(), tex);
+            self.spot_icons.insert(p, tex);
+            ctx.request_repaint();
         }
-        self.spot_icons.get(path).and_then(|o| o.as_ref()).map(|t| t.id())
+        if !self.spot_icons.contains_key(path) && self.spot_icons_asked.insert(path.to_path_buf()) {
+            let (tx, path) = (self.spot_icon_tx.clone(), path.to_path_buf());
+            std::thread::spawn(move || {
+                let _ = tx.send((path.clone(), crate::shell_icon::icon_rgba(&path)));
+            });
+        }
     }
 
     pub(crate) fn draw_spotlight(&mut self, ui: &mut egui::Ui, rect: Rect, a: f32) {
@@ -96,7 +103,7 @@ impl Notch {
             let selected = i == self.spot.sel;
             let armed = self.spot.armed == Some(i);
             if selected {
-                p.rect_filled(row, 9.0, fade(if armed { RED } else { BLUE }, a));
+                p.rect_filled(row, 9.0, fade(if armed { RED } else { accent_color() }, a));
             }
             let ic = Rect::from_center_size(pos2(row.left() + 22.0, row.center().y), Vec2::splat(24.0));
             let real = self.spot_icons.get(&h.path).and_then(|o| o.as_ref()).map(|t| t.id());
@@ -106,7 +113,7 @@ impl Notch {
             } else {
                 let (bg, glyph): (Color32, fn(&egui::Painter, egui::Pos2, Color32)) = match h.kind {
                     spotlight::Kind::Calc => (ORANGE, ui::icon_calc),
-                    spotlight::Kind::App => (BLUE, ui::icon_app),
+                    spotlight::Kind::App => (accent_color(), ui::icon_app),
                     spotlight::Kind::File => (Color32::from_gray(99), ui::icon_file),
                     spotlight::Kind::Web => (GREEN, ui::icon_search),
                     spotlight::Kind::Action => h.action.as_ref().map_or((Color32::from_gray(99), ui::icon_close), action_style),
@@ -163,7 +170,7 @@ impl Notch {
 fn action_style(a: &actions::Action) -> (Color32, fn(&egui::Painter, egui::Pos2, Color32)) {
     use crate::actions::Action::*;
     match a {
-        Lock => (BLUE, ui::icon_lock),
+        Lock => (accent_color(), ui::icon_lock),
         Sleep => (Color32::from_rgb(94, 92, 230), ui::icon_sleep),
         Restart => (ORANGE, ui::icon_power),
         Shutdown => (RED, ui::icon_power),
@@ -176,7 +183,7 @@ fn action_style(a: &actions::Action) -> (Color32, fn(&egui::Painter, egui::Pos2,
         Note(_) | OpenNotes => (ORANGE, ui::icon_clipboard),
         Update => (GREEN, ui::icon_app),
         Diagnostics => (GRAY, ui::icon_app),
-        Weather | City(_) => (BLUE, ui::icon_cloud),
+        Weather | City(_) => (accent_color(), ui::icon_cloud),
         Remind(_) | Snooze => (ORANGE, ui::icon_timer),
         Done(_) => (GREEN, ui::icon_timer),
     }

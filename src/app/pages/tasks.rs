@@ -50,9 +50,9 @@ impl Notch {
             }
             let circle = Rect::from_center_size(pos2(row.left() + ROW_PAD + 7.0, row.center().y), Vec2::splat(18.0));
             let tick = hit(ui, &format!("task{}", task.id), circle).on_hover_text("Tick off");
-            p.circle_stroke(circle.center(), 6.0, Stroke::new(1.5, fade(if tick.hovered() { GREEN } else { GRAY }, a)));
+            p.circle_stroke(circle.center(), 6.0, Stroke::new(1.5, fade(if tick.hovered() { accent_color() } else { GRAY }, a)));
             if tick.hovered() {
-                p.circle_filled(circle.center(), 3.0, fade(GREEN, a));
+                p.circle_filled(circle.center(), 3.0, fade(accent_color(), a));
             }
             if tick.clicked() {
                 done = Some(task.id);

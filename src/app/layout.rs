@@ -47,6 +47,9 @@ pub(crate) const ROW_PITCH: f32 = 24.0;
 /// First row of the clipboard list (below its 12 px caption and a gap) and of the apps list (below 20 px chips).
 pub(crate) const CLIP_TOP: f32 = TOP + 12.0 + GAP;
 pub(crate) const APPS_TOP: f32 = TOP + 20.0 + GAP_S;
+/// Settings rows are 21 px; the General page has three rows per column and the accent colour row under them.
+pub(crate) const SETTINGS_ROW: f32 = 21.0;
+pub(crate) const SETTINGS_GENERAL_H: f32 = APPS_TOP + 4.0 * SETTINGS_ROW + GAP_S + MARGIN;
 /// Month grid: weekday letters, first row, row pitch and the radius of the disc behind today.
 pub(crate) const CAL_TOP: f32 = TOP + 35.0;
 pub(crate) const CAL_ROW_H: f32 = 13.0;

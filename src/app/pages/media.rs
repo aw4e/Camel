@@ -128,15 +128,37 @@ impl Notch {
 
         let first = (self.lyric_pos - 3.0).floor().max(0.0) as usize;
         let last = ((self.lyric_pos + 3.0).ceil().max(0.0) as usize).min(lines.len().saturating_sub(1));
-        for (i, (start, text)) in lines.iter().enumerate().take(last + 1).skip(first) {
+        let width = x1 - x0;
+        let shown = |i: usize, text: &str| if text.is_empty() && (i as f32 - self.lyric_pos).abs() < 0.5 { "♪".to_owned() } else { text.to_owned() };
+        // One size for every line: a size that follows the glide would re-wrap the text on every frame and make the lines
+        // jump. The current line stands out by its brightness instead.
+        const SIZE: f32 = 14.0;
+        let height = |i: usize, text: &str| p.layout(shown(i, text), bold(SIZE), Color32::WHITE, width).size().y.max(LINE_H - 4.0) + 4.0;
+        // y of the middle of every drawn line: the current one sits at `center`, the rest stack above and below it, the
+        // fraction of `lyric_pos` slides the whole stack so the glide stays smooth
+        let range: Vec<usize> = (first..=last).collect();
+        let heights: Vec<f32> = range.iter().map(|&i| lines.get(i).map_or(LINE_H, |l| height(i, &l.1))).collect();
+        let base = (self.lyric_pos.floor().max(0.0) as usize).clamp(first, last);
+        let frac = self.lyric_pos - base as f32;
+        let mut mid = vec![0.0f32; range.len()];
+        let at = base - first;
+        for k in at + 1..range.len() {
+            mid[k] = mid[k - 1] + (heights[k - 1] + heights[k]) / 2.0;
+        }
+        for k in (0..at).rev() {
+            mid[k] = mid[k + 1] - (heights[k + 1] + heights[k]) / 2.0;
+        }
+        let slide = frac * if at + 1 < range.len() { (heights[at] + heights[at + 1]) / 2.0 } else { LINE_H };
+        for (k, &i) in range.iter().enumerate() {
+            let Some((start, text)) = lines.get(i) else { continue };
             let d = i as f32 - self.lyric_pos;
             let near = (1.0 - d.abs()).clamp(0.0, 1.0);
-            let text = if text.is_empty() && near > 0.5 { "♪" } else { text.as_str() };
+            let text = shown(i, text);
             if text.is_empty() {
                 continue;
             }
-            let y = center + d * LINE_H;
-            let hover_rect = Rect::from_min_size(pos2(x0 - 4.0, y - LINE_H / 2.0), vec2(x1 - x0 + 8.0, LINE_H)).intersect(region);
+            let y = center + mid[k] - slide;
+            let hover_rect = Rect::from_min_size(pos2(x0 - 4.0, y - heights[k] / 2.0), vec2(width + 8.0, heights[k])).intersect(region);
             let tip = if dur > 0.0 { "Click to jump here. Shift+click if the lyrics are early or late." } else { "Click the line you hear to sync." };
             let resp = hit(ui, &format!("line{i}"), hover_rect).on_hover_text(tip);
             if resp.clicked() {
@@ -151,13 +173,10 @@ impl Notch {
             let shade = if resp.hovered() { 255 } else { (150.0 + 105.0 * near) as u8 };
             let alpha = (1.0 - 0.45 * d.abs()).clamp(0.0, 1.0) * a;
             let color = fade(Color32::from_gray(shade), alpha);
-            let mut size = 12.5 + 3.0 * near;
-            let mut galley = p.layout_no_wrap(text.to_owned(), bold(size), color);
-            if galley.size().x > x1 - x0 {
-                size = (size * (x1 - x0) / galley.size().x).max(size * 0.75);
-                galley = p.layout_no_wrap(text.to_owned(), bold(size), color);
-            }
-            clip.galley(pos2(x0, y - galley.size().y / 2.0), galley, color);
+            let galley = crate::widgets::wrap_centered(&p, text, bold(SIZE), color, width);
+            // a wrapped line is centred in the column, a single line stays on the left edge like the rest
+            let x = if galley.rows.len() > 1 { x0 + width / 2.0 - galley.rect.center().x } else { x0 };
+            clip.galley(pos2(x, y - galley.size().y / 2.0), galley, color);
         }
 
         if dur <= 0.0 {

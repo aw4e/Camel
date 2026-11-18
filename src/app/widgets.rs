@@ -61,6 +61,18 @@ pub(crate) fn fit_bold(p: &egui::Painter, text: &str, size: f32, room: f32, colo
     }
 }
 
+/// Text wrapped to `width`; when it needs more than one row, the rows are centred on each other instead of left-aligned.
+/// Paint it with its `rect` centre on the wanted centre: a centred galley's rows start at a different x than a left one.
+pub(crate) fn wrap_centered(p: &egui::Painter, text: String, font: egui::FontId, color: Color32, width: f32) -> std::sync::Arc<egui::Galley> {
+    let plain = p.layout(text.clone(), font.clone(), color, width);
+    if plain.rows.len() < 2 {
+        return plain;
+    }
+    let mut job = egui::text::LayoutJob::simple(text, font, color, width);
+    job.halign = egui::Align::Center;
+    p.layout_job(job)
+}
+
 pub(crate) fn hsv(h: f32, s: f32, v: f32) -> Color32 {
     let f = |n: f32| {
         let k = (n + h / 60.0) % 6.0;
@@ -90,6 +102,12 @@ pub(crate) fn clean_text(s: &str) -> String {
     s.chars().filter(|c| !matches!(c, '\u{FE0E}' | '\u{FE0F}' | '\u{200B}'..='\u{200D}' | '\u{2060}')).collect()
 }
 
+/// Kana, Han ideographs or Hangul: text the bundled Latin fonts cannot draw.
+pub(crate) fn needs_cjk(s: &str) -> bool {
+    s.chars()
+        .any(|c| matches!(c, '\u{1100}'..='\u{11FF}' | '\u{3040}'..='\u{30FF}' | '\u{3130}'..='\u{318F}' | '\u{3400}'..='\u{9FFF}' | '\u{AC00}'..='\u{D7AF}'))
+}
+
 /// "14:05", or "2:05 PM" on a 12-hour clock.
 pub(crate) fn clock_text(now: &chrono::DateTime<chrono::Local>, h24: bool) -> String {
     now.format(if h24 { "%H:%M" } else { "%-I:%M %p" }).to_string()
@@ -99,6 +117,12 @@ pub(crate) fn clock_text(now: &chrono::DateTime<chrono::Local>, h24: bool) -> St
 mod tests {
     use super::*;
     use chrono::TimeZone;
+
+    #[test]
+    fn spots_cjk_text() {
+        assert!(needs_cjk("夜に駆ける") && needs_cjk("사랑해") && needs_cjk("你好"));
+        assert!(!needs_cjk("Blinding Lights ♪ café"));
+    }
 
     #[test]
     fn invisible_emoji_parts_are_dropped_and_visible_text_is_kept() {
