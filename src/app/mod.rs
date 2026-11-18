@@ -201,6 +201,9 @@ pub(crate) struct Notch {
     shape: Rect,
     trim_at: Instant,
     mode: Mode,
+    /// The mode before the last change, and the size the open panel had: the open panel fades out over the shrinking shape.
+    prev_mode: Mode,
+    open_size: Vec2,
     mode_at: Instant,
     last_hover: Instant,
     pinned: bool,
@@ -334,6 +337,8 @@ impl Notch {
             // first trim ~2 s after launch, then every 30 s of idle
             trim_at: Instant::now() - Duration::from_secs(28),
             mode: Mode::Compact,
+            prev_mode: Mode::Compact,
+            open_size: vec2(OPEN_W, OPEN_H),
             mode_at: Instant::now(),
             last_hover: Instant::now() - Duration::from_secs(10),
             pinned: false,
@@ -1127,6 +1132,7 @@ impl eframe::App for Notch {
             Mode::Compact
         };
         if mode != self.mode {
+            self.prev_mode = self.mode;
             self.mode = mode;
             self.mode_at = now;
         }
@@ -1139,6 +1145,9 @@ impl eframe::App for Notch {
         }
 
         let (target, shape_moving) = self.fit_window(&ctx, mode, dt);
+        if mode == Mode::Open {
+            self.open_size = target;
+        }
 
         self.sync_tab();
         let fading = self.tab_at.elapsed() < Duration::from_millis(200);
@@ -1181,6 +1190,15 @@ impl eframe::App for Notch {
             }
             ui.set_clip_rect(body.intersect(ui.clip_rect()));
 
+            // Leaving the open panel: its content fades out while the shape is still shrinking. Cutting it at once left a
+            // big empty black box for a moment.
+            if self.prev_mode == Mode::Open && !matches!(mode, Mode::Open | Mode::Spot) {
+                let out = 1.0 - (self.mode_at.elapsed().as_secs_f32() / 0.12).clamp(0.0, 1.0);
+                if out > 0.0 {
+                    let open = Rect::from_min_size(pos2((win_rect.center().x - self.open_size.x / 2.0).round(), win_rect.top()), self.open_size);
+                    self.draw_open(ui, open, &m, out);
+                }
+            }
             let a = self.mode_alpha();
             if a == 0.0 {
                 return;
