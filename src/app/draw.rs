@@ -123,8 +123,9 @@ impl Notch {
         self.lyric_hold.set(hold);
         self.lyric_w.set(hold.0);
         self.lyric_h.set(hold.1);
-        // a new line fades in while the one before fades out, so the change is a crossfade instead of a snap
-        let (fresh, before) = {
+        // the old line fades out, then the new one fades in. Both are centred on the same spot, so drawing them at once
+        // would print one over the other and the text would be unreadable for a moment.
+        let (t, before) = {
             let mut last = self.lyric_last.borrow_mut();
             if last.0 != line {
                 *last = (line, last.0.clone(), Instant::now());
@@ -132,13 +133,17 @@ impl Notch {
             ((last.2.elapsed().as_secs_f32() / 0.22).clamp(0.0, 1.0), last.1.clone())
         };
         let top = rect.top() + PILL_H - 2.0;
-        if fresh < 1.0 {
+        if t < 1.0 {
             p.ctx().request_repaint();
+        }
+        if t < 0.5 {
             if !before.is_empty() {
                 let old = crate::widgets::wrap_centered(p, before, bold(12.5), white, room);
-                p.galley(pos2(rect.center().x - old.rect.center().x, top), old, fade(Color32::WHITE, (1.0 - fresh) * a));
+                p.galley(pos2(rect.center().x - old.rect.center().x, top), old, fade(Color32::WHITE, (1.0 - t * 2.0) * a));
             }
+            return;
         }
+        let fresh = (t * 2.0 - 1.0).clamp(0.0, 1.0);
         p.galley(pos2(rect.center().x - galley.rect.center().x, top), galley, fade(Color32::WHITE, fresh * a));
     }
 

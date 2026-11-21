@@ -99,7 +99,13 @@ pub(crate) fn accent(a: &media::Art) -> Color32 {
 /// Text from a player, a lyrics file or the clipboard without the invisible characters that follow an emoji (variation
 /// selectors, zero-width joiners). No font draws them, so they would show as empty boxes.
 pub(crate) fn clean_text(s: &str) -> String {
-    s.chars().filter(|c| !matches!(c, '\u{FE0E}' | '\u{FE0F}' | '\u{200B}'..='\u{200D}' | '\u{2060}')).collect()
+    // Zero-width and direction marks, soft hyphen, BOM and tag characters: the emoji font has a coloured box for some of them
+    s.chars()
+        .filter(|c| {
+            !matches!(c, '\u{00AD}' | '\u{061C}' | '\u{180E}' | '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{206F}'
+                | '\u{FE00}'..='\u{FE0F}' | '\u{FEFF}' | '\u{E0000}'..='\u{E007F}')
+        })
+        .collect()
 }
 
 /// Kana, Han ideographs or Hangul: text the bundled Latin fonts cannot draw.
