@@ -109,13 +109,13 @@ impl Notch {
         let white = fade(Color32::WHITE, a);
         let room = LYRIC_MAX_W - LYRIC_PAD;
         let galley = crate::widgets::wrap_centered(p, line.clone(), bold(12.5), white, room);
-        // The notch grows at once for a longer line but shrinks only after a few seconds, so alternating long and short
-        // lines do not make it breathe in and out on every change.
+        // The notch grows immediately for a longer line. For a shorter line a brief hold (300 ms) prevents a flicker
+        // when two consecutive lines are almost the same width; after that the spring takes it smoothly to the new size.
         let need = (galley.size().x + LYRIC_PAD, galley.size().y + 8.0);
         let (hw, hh, since) = self.lyric_hold.get();
         let hold = if need.0 > hw || need.1 > hh {
             (hw.max(need.0), hh.max(need.1), Instant::now())
-        } else if since.elapsed() > Duration::from_secs(5) {
+        } else if since.elapsed() > Duration::from_millis(300) {
             (need.0, need.1, Instant::now())
         } else {
             (hw, hh, since)
