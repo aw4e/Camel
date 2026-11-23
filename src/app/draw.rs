@@ -106,7 +106,8 @@ impl Notch {
             return;
         };
         let line = crate::widgets::clean_text(line);
-        let white = fade(Color32::WHITE, a);
+        // PLACEHOLDER: the colour is chosen when the galley is painted, so each line can fade by itself
+        let white = Color32::PLACEHOLDER;
         let room = LYRIC_MAX_W - LYRIC_PAD;
         let galley = crate::widgets::wrap_centered(p, line.clone(), bold(12.5), white, room);
         // The notch grows at once for a longer line but shrinks only after a few seconds, so alternating long and short
@@ -123,28 +124,37 @@ impl Notch {
         self.lyric_hold.set(hold);
         self.lyric_w.set(hold.0);
         self.lyric_h.set(hold.1);
-        // the old line fades out, then the new one fades in. Both are centred on the same spot, so drawing them at once
-        // would print one over the other and the text would be unreadable for a moment.
+        // The lines scroll like a reel: the old one leaves upwards while the new one comes in from below. The two are always
+        // one travel distance apart, and that is more than the taller of them, so they never touch. The text is clipped to the
+        // lyric row, so the old line slides away under the clock row instead of drawing over it.
         let (t, before) = {
             let mut last = self.lyric_last.borrow_mut();
             if last.0 != line {
                 *last = (line, last.0.clone(), Instant::now());
             }
-            ((last.2.elapsed().as_secs_f32() / 0.22).clamp(0.0, 1.0), last.1.clone())
+            ((last.2.elapsed().as_secs_f32() / 0.4).clamp(0.0, 1.0), last.1.clone())
         };
         let top = rect.top() + PILL_H - 2.0;
+        let q = p.with_clip_rect(Rect::from_min_max(pos2(rect.left(), top), pos2(rect.right(), rect.bottom())));
+        // ease in and out: the scroll starts and stops softly, with no jolt where the new line lands
+        let ease = t * t * (3.0 - 2.0 * t);
+        let old = (t < 1.0 && !before.is_empty()).then(|| crate::widgets::wrap_centered(p, before, bold(12.5), white, room));
+        let travel = old.as_ref().map_or(0.0, |o| o.size().y).max(galley.size().y) + 4.0;
         if t < 1.0 {
             p.ctx().request_repaint();
         }
-        if t < 0.5 {
-            if !before.is_empty() {
-                let old = crate::widgets::wrap_centered(p, before, bold(12.5), white, room);
-                p.galley(pos2(rect.center().x - old.rect.center().x, top), old, fade(Color32::WHITE, (1.0 - t * 2.0) * a));
-            }
-            return;
+        if let Some(old) = old {
+            q.galley(pos2(rect.center().x - old.rect.center().x, top - travel * ease), old, fade(Color32::WHITE, (1.0 - ease) * a));
         }
-        let fresh = (t * 2.0 - 1.0).clamp(0.0, 1.0);
-        p.galley(pos2(rect.center().x - galley.rect.center().x, top), galley, fade(Color32::WHITE, fresh * a));
+        // The text keeps its final layout while the notch springs to its size and is clipped by it. A longer line would be
+        // revealed bit by bit as the notch widens, so the line only fades in as far as the notch has grown to hold it.
+        let grown = (self.shape.width() / rect.width()).min(self.shape.height() / rect.height());
+        let room_for_text = ((grown - 0.8) / 0.2).clamp(0.0, 1.0);
+        if room_for_text < 1.0 {
+            p.ctx().request_repaint();
+        }
+        let fresh = (if t < 1.0 { ease } else { 1.0 }) * room_for_text;
+        q.galley(pos2(rect.center().x - galley.rect.center().x, top + travel * (1.0 - ease)), galley, fade(Color32::WHITE, fresh * a));
     }
 
     /// Version number next to Quit. It turns into an Update button when a newer release was found.
